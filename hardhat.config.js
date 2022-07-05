@@ -27,7 +27,7 @@ const argv = require('yargs/yargs')()
     mode: {
       alias: 'compileMode',
       type: 'string',
-      choices: [ 'production', 'development' ],
+      choices: ['production', 'development'],
       default: 'development',
     },
     compiler: {
@@ -48,6 +48,8 @@ if (argv.enableGasReport) {
   require('hardhat-gas-reporter');
 }
 
+require('hardhat-contract-sizer');
+
 for (const f of fs.readdirSync(path.join(__dirname, 'hardhat'))) {
   require(path.join(__dirname, 'hardhat', f));
 }
@@ -63,7 +65,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: withOptimizations,
-        runs: 200,
+        runs: 999999,
       },
     },
   },
@@ -77,6 +79,10 @@ module.exports = {
     currency: 'USD',
     outputFile: argv.ci ? 'gas-report.txt' : undefined,
     coinmarketcap: argv.coinmarketcap,
+  },
+  contractSizer: {
+    runOnCompile: true,
+    disambiguatePaths: false,
   },
 };
 
