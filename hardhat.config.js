@@ -84,6 +84,23 @@ module.exports = {
     runOnCompile: true,
     disambiguatePaths: false,
   },
+  solidity: {
+    version: '0.8.15',
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 999999
+      }
+    }
+  },
+  paths: {
+    artifacts: "./artifacts",
+    cache: "./cache",
+    sources: "./contracts",
+    tests: "./test",
+    deploy: "./deploy",
+    deployments: "./deployments",
+  },
 };
 
 if (argv.coverage) {

@@ -3,6 +3,7 @@
 pragma solidity ^0.8.15;
 
 import "./token/ERC20/extensions/ERC20Burnable.sol";
+import "./token/ERC20/extensions/ERC20Votes.sol";
 import "./token/ERC20/utils/SafeERC20.sol";
 import "./access/Ownable.sol";
 import "./libraries/structs/EnumerableSet.sol";
@@ -10,7 +11,7 @@ import "./interfaces/governance/IGovernanceLock.sol";
 
 // solhint-disable max-line-length
 
-contract RequiemShare is ERC20Burnable, IGovernanceLock, Ownable {
+contract RequiemShare is ERC20Votes, ERC20Burnable, IGovernanceLock, Ownable {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
 
@@ -51,7 +52,7 @@ contract RequiemShare is ERC20Burnable, IGovernanceLock, Ownable {
         string memory _symbol,
         address _lockedToken,
         uint256 _minLockedAmount
-    ) ERC20(_name, _symbol) {
+    ) ERC20(_name, _symbol) ERC20Permit(_name){
         lockedToken = _lockedToken;
         minLockedAmount = _minLockedAmount;
         earlyWithdrawPenaltyRate = 30000; // 30%
@@ -571,6 +572,22 @@ contract RequiemShare is ERC20Burnable, IGovernanceLock, Ownable {
         uint256 _oldMultiplier
     ) internal pure returns (uint256) {
         return (_endOld * _oldMultiplier + (_end - _endOld) * _calculate_multiplier(_ref, _end)) / _end;
+    }
+
+    function _mint(address account, uint256 amount) internal virtual override(ERC20, ERC20Votes) {
+        super._mint(account, amount);
+    }
+
+    function _burn(address account, uint256 amount) internal virtual override(ERC20, ERC20Votes) {
+        super._burn(account, amount);
+    }
+
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) internal virtual override(ERC20, ERC20Votes) {
+        super._afterTokenTransfer(from, to, amount);
     }
 
     /* ========== RESTRICTED FUNCTIONS ========== */

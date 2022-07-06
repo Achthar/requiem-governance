@@ -3,6 +3,8 @@
 
 pragma solidity ^0.8.0;
 
+// solhint-disable max-line-length
+
 /**
  * @dev Library for managing
  * https://en.wikipedia.org/wiki/Set_(abstract_data_type)[sets] of primitive
