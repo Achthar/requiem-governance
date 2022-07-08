@@ -3,6 +3,8 @@
 pragma solidity ^0.8.15;
 
 import "./Governor.sol";
+import "./interfaces/governance/IGovernanceLock.sol";
+import "./interfaces/IERC20.sol";
 import "./access/Ownable.sol";
 import "./compatibility/GovernorCompatibilityBravo.sol";
 import "./extensions/GovernorVotes.sol";
@@ -55,7 +57,7 @@ contract RequiemGovernor is Ownable, Governor, GovernorCompatibilityBravo, Gover
     }
 
     function getVotes(address account, uint256 blockNumber) public view override(IGovernor, Governor) returns (uint256) {
-        return super.getVotes(account, blockNumber);
+        return _getVotes(account, blockNumber, "");
     }
 
     function state(uint256 proposalId) public view override(Governor, IGovernor, GovernorTimelockControl) returns (ProposalState) {
@@ -96,5 +98,14 @@ contract RequiemGovernor is Ownable, Governor, GovernorCompatibilityBravo, Gover
 
     function supportsInterface(bytes4 interfaceId) public view override(Governor, IERC165, GovernorTimelockControl) returns (bool) {
         return super.supportsInterface(interfaceId);
+    }
+
+    function _getVotes(
+        address account,
+        uint256,
+        bytes memory
+    ) internal view override(Governor, GovernorVotes) returns (uint256) {
+        address tokenAddress = address(token);
+        return IGovernanceLock(tokenAddress).getVotingPower(account);
     }
 }

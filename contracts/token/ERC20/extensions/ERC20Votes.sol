@@ -32,8 +32,7 @@ abstract contract ERC20Votes is IVotes, ERC20Permit {
         uint224 votes;
     }
 
-    bytes32 private constant _DELEGATION_TYPEHASH =
-        keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
+    bytes32 private constant _DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
 
     mapping(address => address) private _delegates;
     mapping(address => Checkpoint[]) private _checkpoints;
@@ -141,12 +140,7 @@ abstract contract ERC20Votes is IVotes, ERC20Permit {
         bytes32 s
     ) public virtual override {
         require(block.timestamp <= expiry, "ERC20Votes: signature expired");
-        address signer = ECDSA.recover(
-            _hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, delegatee, nonce, expiry))),
-            v,
-            r,
-            s
-        );
+        address signer = ECDSA.recover(_hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, delegatee, nonce, expiry))), v, r, s);
         require(nonce == _useNonce(signer), "ERC20Votes: invalid nonce");
         _delegate(signer, delegatee);
     }
