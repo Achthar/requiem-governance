@@ -25,7 +25,7 @@ library YieldCalculator {
         int256 int_a = int256(a);
         int256 int_t = int256(end - start);
         int256 int_interval = int256(interval);
-        return uint256(int_a * _baseRate(int_a, int_t, int_interval) / YieldMath.ONE_18 - int_a);
+        return uint256((int_a * _baseRate(int_a, int_t, int_interval)) / YieldMath.ONE_18 - int_a);
     }
 
     /**
@@ -43,10 +43,14 @@ library YieldCalculator {
         int256 int_t0 = int256(start - current);
         int256 int_t1 = int256(end - start);
         int256 int_interval = int256(interval);
-        return uint256(int_a * (_baseRate(int_a, int_t1, int_interval)-_baseRate(int_a, int_t0, int_interval)) / YieldMath.ONE_18);
+        return uint256((int_a * (_baseRate(int_a, int_t1, int_interval) - _baseRate(int_a, int_t0, int_interval))) / YieldMath.ONE_18);
     }
 
-    function _baseRate(int256 a, int256 t, int256 interval) private pure returns (int256){
+    function _baseRate(
+        int256 a,
+        int256 t,
+        int256 interval
+    ) private pure returns (int256) {
         int256 _b = YieldMath.ln((YieldMath.ONE_18 + a) / a);
         return YieldMath.exp((_b * (t * YieldMath.ONE_18)) / interval) / YieldMath.ONE_18;
     }
