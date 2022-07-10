@@ -10,22 +10,21 @@ interface IGovernanceRequiem {
 
     function increasePosition(
         uint256 _value,
-        uint256 _end,
+        uint256 _id,
         address _recipient
     ) external;
 
     function increaseTimeToMaturity(
         uint256 _amount,
-        uint256 _end,
+        uint256 _id,
         uint256 _newEnd
     ) external returns (uint256);
 
-    function transferFullLock(uint256 _id, address _to) external;
-
-    function transferLockShare(
+    function transferLock(
         uint256 _amount,
         uint256 _id,
-        address _to
+        address _to,
+        bool _sendTokens
     ) external returns (uint256);
 
     function splitLock(
@@ -34,9 +33,9 @@ interface IGovernanceRequiem {
         address _recipient
     ) external returns (uint256);
 
-    function mergeLocks(uint256 _firstId, uint256 _secondId) external;
+    function mergeLocks(uint256 _firstId, uint256 _secondId) external returns (uint256);
 
-    function withdraw(uint256 _end, uint256 _amount) external;
+    function withdraw(uint256 _id, uint256 _amount) external;
 
     function withdrawAll() external;
 }

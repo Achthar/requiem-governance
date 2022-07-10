@@ -12,6 +12,9 @@ import "./LockKeeper.sol";
 
 // solhint-disable max-line-length
 
+/// @title Requiem Governance Token
+/// @author Achthar
+
 contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, LockKeeper {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
@@ -70,8 +73,21 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      */
     function getTotalAmountLocked(address _addr) external view returns (uint256 _userAmount) {
         for (uint256 i = 0; i < lockIds[_addr].length(); i++) {
-            uint256 _end = lockIds[_addr].at(i);
-            _userAmount += lockedPositions[_addr][_end].amount;
+            uint256 _id = lockIds[_addr].at(i);
+            _userAmount += lockedPositions[_addr][_id].amount;
+        }
+    }
+
+    /**
+     * @notice Returns indexes which are referring to locked positions for user
+     * @param _addr user address
+     * @return _indexes indexes for user
+     */
+    function getUserIndexes(address _addr) external view returns (uint256[] memory _indexes) {
+        uint256 _count = lockIds[_addr].length();
+        _indexes = new uint256[](_count);
+        for (uint256 i = 0; i < _count; i++) {
+            _indexes[i] = lockIds[_addr].at(i);
         }
     }
 
@@ -82,8 +98,8 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      */
     function getVotingPower(address _addr) external view returns (uint256 _votingPower) {
         for (uint256 i = 0; i < lockIds[_addr].length(); i++) {
-            uint256 _end = lockIds[_addr].at(i);
-            _votingPower += lockedPositions[_addr][_end].minted;
+            uint256 _id = lockIds[_addr].at(i);
+            _votingPower += lockedPositions[_addr][_id].minted;
         }
     }
 
@@ -217,7 +233,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     /**
      * @notice Merges two locks of the user. The one with the lower maturity will be extended to match the other.
      */
-    function mergeLocks(uint256 _firstId, uint256 _secondId) external override {
+    function mergeLocks(uint256 _firstId, uint256 _secondId) external override returns (uint256 _remainingId) {
         require(_firstId != _secondId, "invalid Id constellation");
         (uint256 _lateId, uint256 _earlyId) = lockedPositions[_msgSender()][_firstId].end > lockedPositions[_msgSender()][_secondId].end
             ? (_firstId, _secondId)
@@ -254,6 +270,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         // delete the lock with earlyId
         _deleteLock(_msgSender(), _earlyId);
         _lateLock.start = _weightedSum(_lateLock.start, _earlyLock.start, _lateAmount, _earlyAmount);
+        _remainingId = _lateId;
     }
 
     /**
@@ -283,26 +300,28 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
 
     /**
      * @notice Withdraws from specific lock if possible
-     * @param _end maturity of the position to increase
+     * @param _id id of the position to increase
      * @param _amount amount to withdraw fromn lock
      */
-    function withdraw(uint256 _end, uint256 _amount) external {
-        LockedBalance storage _lock = lockedPositions[_msgSender()][_end];
+    function withdraw(uint256 _id, uint256 _amount) external {
+        LockedBalance storage _lock = lockedPositions[_msgSender()][_id];
         uint256 _now = block.timestamp;
         uint256 _locked = _lock.amount;
         require(_locked > 0, "Nothing to withdraw");
-        require(_now >= _end, "The lock didn't expire");
-        if (_amount >= _locked) {
+        require(_now >= _lock.end, "The lock didn't expire");
+        if (_amount == _locked) {
             // burn minted amount
             _burn(_msgSender(), _lock.minted);
 
             // delete lock entry
-            _deleteLock(_msgSender(), _end);
-        } else {
+            _deleteLock(_msgSender(), _id);
+        } else if (_amount < _locked) {
             uint256 _minted = _shareOf(_lock.minted, _amount, _locked);
             _lock.amount -= _amount;
             _lock.minted -= _minted;
             _burn(_msgSender(), _minted);
+        } else {
+            revert("insufficient amount in lock");
         }
 
         IERC20(lockedToken).safeTransfer(_msgSender(), _amount);
@@ -312,14 +331,14 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
 
     /**
      * @notice Withdraws from specific lock - this will charge PENALTY if lock is not expired yet.
-     * @param _end maturity of the position to increase
+     * @param _id id of the position to withdraw
      */
-    function emergencyWithdraw(uint256 _end) external {
-        LockedBalance memory _lock = lockedPositions[_msgSender()][_end];
+    function emergencyWithdraw(uint256 _id) external {
+        LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
         uint256 _amount = _lock.amount;
         uint256 _now = block.timestamp;
         require(_amount > 0, "Nothing to withdraw");
-        if (_now < _end) {
+        if (_now < _lock.end) {
             uint256 _fee = (_amount * earlyWithdrawPenaltyRate) / PRECISION;
             _penalize(_fee);
             _amount -= _fee;
@@ -329,7 +348,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         _burn(_msgSender(), _lock.minted);
 
         // remove lock
-        _deleteLock(_msgSender(), _end);
+        _deleteLock(_msgSender(), _id);
 
         IERC20(lockedToken).safeTransfer(_msgSender(), _amount);
 
@@ -370,45 +389,47 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      * @param _id id of lock to transfer
      * @param _to recipient address
      */
-    function transferLockShare(
+    function transferLock(
         uint256 _amount,
         uint256 _id,
-        address _to
-    ) external override returns (uint256 _newId) {
+        address _to,
+        bool _sendTokens
+    ) external override returns (uint256 _receivedId) {
         LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
-        uint256 _vp = _shareOf(_lock.minted, _amount, _lock.amount);
+        require(_amount <= _lock.amount, "Insufficient funds in Lock");
+        uint256 _vpToSend;
+        if (_amount == _lock.amount) {
+            // log the amount for the recipient
+            _receiveLock(_id, _lock, _to);
+            _vpToSend = _lock.minted;
 
-        require(_amount < _lock.amount, "Insufficient funds in Lock");
+            // reduce this users lock data
+            _deleteLock(_msgSender(), _id);
 
-        // adjust lock before transfer
-        _lock.amount = _amount;
-        _lock.minted = _vp;
-        _newId = lockCount;
-        // log the amount for the recipient - create new lock
-        _receiveLock(_newId, _lock, _to);
-        // increase count
-        lockCount += 1;
+            // full transfer means that the id is just moved
+            _receivedId = _id;
+        } else if (_amount < _lock.amount) {
+            _vpToSend = _shareOf(_lock.minted, _amount, _lock.amount);
 
-        // reduce this users lock amount
-        lockedPositions[_msgSender()][_id].amount -= _amount;
+            // adjust lock before transfer
+            _lock.amount = _amount;
+            _lock.minted = _vpToSend;
+            _receivedId = lockCount;
+            // log the amount for the recipient - create new lock
+            _receiveLock(_receivedId, _lock, _to);
+            // increase count
+            lockCount += 1;
 
-        // reduce related voting power
-        lockedPositions[_msgSender()][_id].minted -= _vp;
-    }
+            // reduce this users lock amount
+            lockedPositions[_msgSender()][_id].amount -= _amount;
 
-    /**
-     * @dev Function that transfers the full lock of the user to the recipient.
-     * @param _id id of lock to transfer
-     * @param _to recipient address
-     */
-    function transferFullLock(uint256 _id, address _to) external override {
-        LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
+            // reduce related voting power
+            lockedPositions[_msgSender()][_id].minted -= _vpToSend;
+        } else {
+            revert("invalid amount");
+        }
 
-        // log the amount for the recipient
-        _receiveLock(_id, _lock, _to);
-
-        // reduce this users lock data
-        _deleteLock(_msgSender(), _id);
+        if (_sendTokens) this.transferFrom(_msgSender(), _to, _vpToSend);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */

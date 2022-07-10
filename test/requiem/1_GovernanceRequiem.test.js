@@ -414,4 +414,119 @@ contract('Governance Requiem Locks', function (accounts) {
     expect(count.toString()).to.equal('2');
   });
 
+  it('full lock transfer no gov tokens sent', async function () {
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, lateEnd, bob.address)
+
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    await this.token.connect(bob).transferLock(amount, 0, carol.address, false)
+
+
+    let firstLocks = await this.token.getLocks(bob.address)
+    let secondLocks = await this.token.getLocks(carol.address)
+
+    // length validation
+    expect(firstLocks.length).to.equal(0)
+    expect(secondLocks.length).to.equal(1)
+    let newLock = secondLocks[0]
+
+    // lock should have target amount
+    expect(newLock.amount.toString()).to.equal(amount);
+
+    // minted amound should have increased
+    expect(newLock.minted.toString()).to.equal(userLocks[0].minted.toString());
+    expect(Number(newLock.end.toString())).to.equal(Number(userLocks[0].end.toString()));
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('1');
+  });
+
+
+  it('paritial transfer no gov tokens sent', async function () {
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, lateEnd, bob.address)
+
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    const amountToSend = '700000000000000000000' //10k
+    await this.token.connect(bob).transferLock(amountToSend, 0, carol.address, false)
+
+
+    let firstLocks = await this.token.getLocks(bob.address)
+    let secondLocks = await this.token.getLocks(carol.address)
+
+    // length validation
+    expect(firstLocks.length).to.equal(1)
+    expect(secondLocks.length).to.equal(1)
+    let oldLock = firstLocks[0]
+    let newLock = secondLocks[0]
+
+    // lock should have target amount
+    expect(oldLock.amount.toString()).to.equal('300000000000000000000');
+    expect(newLock.amount.toString()).to.equal(amountToSend);
+
+    const newMinted = userLocks[0].minted.mul(amountToSend).div(amount)
+    // minted amound should have increased
+    expect(newLock.minted.toString()).to.equal(newMinted.toString());
+    expect(oldLock.minted.toString()).to.equal(userLocks[0].minted.sub(newMinted).toString());
+    expect(Number(newLock.end.toString())).to.equal(Number(userLocks[0].end.toString()));
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('2');
+  });
+
+  it('full lock transfer gov tokens sent', async function () {
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, lateEnd, bob.address)
+
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    await this.token.connect(bob).approve(this.token.address, ethers.constants.MaxUint256)
+    await this.token.connect(bob).transferLock(amount, 0, carol.address, true)
+
+    const balance = await this.token.balanceOf(carol.address)
+    
+    // minted amound should have increased
+    expect(balance.toString()).to.equal(userLocks[0].minted.toString());
+  });
+
+  it('paritial transfer gov tokens sent', async function () {
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, lateEnd, bob.address)
+
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    const amountToSend = '700000000000000000000' //10k
+    await this.token.connect(bob).approve(this.token.address, ethers.constants.MaxUint256)
+    await this.token.connect(bob).transferLock(amountToSend, 0, carol.address, true)
+
+    let secondLocks = await this.token.getLocks(carol.address)
+
+    let newLock = secondLocks[0]
+
+    const balance = await this.token.balanceOf(carol.address)
+
+    // minted should be balance
+    expect(newLock.minted.toString()).to.equal(balance.toString());
+  });
+
 });
