@@ -14,7 +14,7 @@ contract LockKeeper is ILockKeeper {
     uint256 public lockCount;
 
     // user address -> end times -> locked position
-    mapping(address => mapping(uint256 => LockedBalance)) internal lockedPositions;
+    mapping(address => mapping(uint256 => LockedBalance)) public lockedPositions;
 
     // tracks the ids for locks per user
     mapping(address => EnumerableSet.UintSet) internal lockIds;

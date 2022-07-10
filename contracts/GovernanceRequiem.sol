@@ -209,7 +209,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _amount,
         uint256 _id,
         address _recipient
-    ) external override lock returns (uint256 _newId) {
+    ) external override returns (uint256 _newId) {
         require(_amount >= minLockedAmount, "< min amount");
         _newId = _splitLock(_msgSender(), _amount, _id, _recipient);
     }
@@ -218,7 +218,8 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      * @notice Merges two locks of the user. The one with the lower maturity will be extended to match the other.
      */
     function mergeLocks(uint256 _firstId, uint256 _secondId) external override {
-        (uint256 _lateId, uint256 _earlyId) = lockedPositions[_msgSender()][_firstId].end >= lockedPositions[_msgSender()][_secondId].end
+        require(_firstId != _secondId, "invalid Id constellation");
+        (uint256 _lateId, uint256 _earlyId) = lockedPositions[_msgSender()][_firstId].end > lockedPositions[_msgSender()][_secondId].end
             ? (_firstId, _secondId)
             : (_secondId, _firstId);
 
@@ -228,19 +229,31 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
 
         uint256 _earlyAmount = _earlyLock.amount;
         uint256 _lateAmount = _lateLock.amount;
+        uint256 _totalAmount = _earlyAmount + _lateAmount;
 
-        // calculate extended amount for old lock
-        uint256 _vpDiff = getAdditionalAmountMinted(_earlyAmount, block.timestamp, _earlyLock.end, _lateLock.end);
-        uint256 _totalAmount = _earlyLock.amount + _lateAmount;
-        uint256 _totalMinted = _earlyLock.minted + _lateLock.minted + _vpDiff;
+        // assign new amount to lock to keep
+        _lateLock.amount = _totalAmount;
 
-        // make sure the minted governance tokens are capped
-        _lateLock.minted = _totalMinted > _totalAmount ? _totalAmount : _totalMinted;
+        // different maturities mean that we have to increase the one of the lower
+        if (lockedPositions[_msgSender()][_firstId].end != lockedPositions[_msgSender()][_secondId].end) {
+            // calculate extended amount for old lock
+            uint256 _vpDiff = getAdditionalAmountMinted(_earlyAmount, block.timestamp, _earlyLock.end, _lateLock.end);
+            uint256 _newVpEarly = _vpDiff + _earlyLock.minted;
+            uint256 _earlyMintedNew = _newVpEarly > _earlyAmount ? _earlyAmount : _newVpEarly;
 
-        _lateLock.start = _weightedSum(_lateLock.start, _earlyLock.start, _lateAmount, _earlyAmount);
+            // make sure the minted governance tokens are capped
+            _lateLock.minted += _earlyMintedNew;
 
-        _mint(_msgSender(), _vpDiff);
+            // mint the added amount of governance tokens
+            _mint(_msgSender(), _earlyMintedNew - _earlyLock.minted);
+        } else {
+            // in this case the maturities are the same, we only need to add the minted amounts
+            _lateLock.minted = _earlyLock.minted + _lateLock.minted;
+        }
+
+        // delete the lock with earlyId
         _deleteLock(_msgSender(), _earlyId);
+        _lateLock.start = _weightedSum(_lateLock.start, _earlyLock.start, _lateAmount, _earlyAmount);
     }
 
     /**
