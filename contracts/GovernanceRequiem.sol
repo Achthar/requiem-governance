@@ -5,9 +5,9 @@ pragma solidity ^0.8.15;
 import "./token/ERC20/extensions/ERC20Burnable.sol";
 import "./token/ERC20/extensions/ERC20Votes.sol";
 import "./token/ERC20/utils/SafeERC20.sol";
-import "./libraries/math/YieldCalculator.sol";
 import "./libraries/structs/EnumerableSet.sol";
 import "./interfaces/governance/IGovernanceRequiem.sol";
+import "./interfaces/governance/ICurveProvider.sol";
 import "./LockKeeper.sol";
 
 // solhint-disable max-line-length
@@ -27,6 +27,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     uint256 public constant PRECISION = 100000; // 5 decimals
 
     address public governor;
+    address public curveProvider;
     address public lockedToken;
     uint256 public minLockedAmount;
     uint256 public earlyWithdrawPenaltyRate;
@@ -49,24 +50,18 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         string memory _name,
         string memory _symbol,
         address _lockedToken,
+        address _curveProvider,
         uint256 _minLockedAmount
     ) ERC20(_name, _symbol) ERC20Permit(_name) {
         lockedToken = _lockedToken;
         minLockedAmount = _minLockedAmount;
         earlyWithdrawPenaltyRate = 30000; // 30%
         _unlocked = 1;
+        curveProvider = _curveProvider;
         governor = _msgSender();
     }
 
     /* ========== PUBLIC FUNCTIONS ========== */
-
-    /**
-     * @notice Calculates governance utility rate.
-     * @return 18-decimal percentage
-     */
-    function getGovernanceUtility() public view returns (uint256) {
-        return _share(this.totalSupply(), IERC20(lockedToken).totalSupply());
-    }
 
     /**
      * @notice Calculates the total amount of locked tokens for the given user
@@ -105,7 +100,9 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _unlockTime
     ) public view returns (uint256) {
         if (_unlockTime - _startTime > MAXTIME) return _value;
-        return _mulDiv(YieldCalculator.rate(MAXTIME, _startTime, _unlockTime, getGovernanceUtility()), _value);
+        return
+            (_value * ICurveProvider(curveProvider).rate(MAXTIME, _startTime, _unlockTime, IERC20(lockedToken).totalSupply(), this.totalSupply())) /
+            1e18;
     }
 
     /**
@@ -123,7 +120,16 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _unlockTime
     ) public view returns (uint256) {
         if (_unlockTime - _startTime > MAXTIME) return _value;
-        return _mulDiv(YieldCalculator.forwardRate(MAXTIME, _now, _startTime, _unlockTime, getGovernanceUtility()), _value);
+        return
+            (_value *
+                ICurveProvider(curveProvider).forwardRate(
+                    MAXTIME,
+                    _now,
+                    _startTime,
+                    _unlockTime,
+                    IERC20(lockedToken).totalSupply(),
+                    this.totalSupply()
+                )) / 1e18;
     }
 
     /**
@@ -136,7 +142,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _value,
         uint256 _end,
         address _recipient
-    ) external override {
+    ) external override returns (uint256 _newId) {
         uint256 _now = block.timestamp;
         uint256 _duration = _end - _now;
         require(_value >= minLockedAmount, "< min amount");
@@ -149,40 +155,63 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         IERC20(lockedToken).safeTransferFrom(_msgSender(), address(this), _value);
         _mint(_recipient, _vp);
 
-        _addLock(_recipient, _value, _vp, _now, _end);
+        _newId = _addLock(_recipient, _value, _vp, _now, _end);
     }
 
     /**
      * Increases the maturity of _amount from _end to _newEnd
      * @param _amount amount to change the maturity for
-     * @param _end maturity
+     * @param _id id of lock
      * @param _newEnd new maturity
      */
     function increaseTimeToMaturity(
         uint256 _amount,
-        uint256 _end,
+        uint256 _id,
         uint256 _newEnd
-    ) external override {
+    ) external override returns (uint256 _newId) {
         uint256 _now = block.timestamp;
         uint256 _duration = _newEnd - _now;
         require(_duration >= MINTIME, "< MINTIME");
         require(_duration <= MAXTIME, "> MAXTIME");
-        _extendMaturity(_msgSender(), _amount, _end, _newEnd);
+        uint256 _lockedAmount = lockedPositions[_msgSender()][_id].amount;
+        if (_amount == _lockedAmount) {
+            _extendMaturity(_msgSender(), _id, _newEnd);
+        } else if (_amount < _lockedAmount) {
+            _newId = _splitLock(_msgSender(), _amount, _id, _msgSender());
+            _extendMaturity(_msgSender(), _newId, _newEnd);
+        } else {
+            revert("invalid amount");
+        }
     }
 
     /**
-     * Function to increase position for given _end
-     * @param _value increase position for position in _end by value
-     * @param _end maturity of the position to increase
+     * Function to increase position for given _id
+     * @param _value increase position for position in _id by value
+     * @param _id id of the position to increase
      * @param _recipient add funds for given user
      */
     function increasePosition(
         uint256 _value,
-        uint256 _end,
+        uint256 _id,
         address _recipient
     ) external override {
         require(_value >= minLockedAmount, "< min amount");
-        _increasePosition(_recipient, _value, _end);
+        _increasePosition(_recipient, _value, _id);
+    }
+
+    /**
+     * Function to increase position for given _id
+     * @param _amount increase position for position in _id by value
+     * @param _id id of the position to increase
+     * @param _recipient add funds for given user
+     */
+    function splitLock(
+        uint256 _amount,
+        uint256 _id,
+        address _recipient
+    ) external override lock returns (uint256 _newId) {
+        require(_amount >= minLockedAmount, "< min amount");
+        _newId = _splitLock(_msgSender(), _amount, _id, _recipient);
     }
 
     /**
@@ -251,15 +280,13 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         require(_locked > 0, "Nothing to withdraw");
         require(_now >= _end, "The lock didn't expire");
         if (_amount >= _locked) {
-            uint256 _minted = _lock.minted;
-
             // burn minted amount
-            _burn(_msgSender(), _minted);
+            _burn(_msgSender(), _lock.minted);
 
             // delete lock entry
             _deleteLock(_msgSender(), _end);
         } else {
-            uint256 _minted = _share(_amount, _locked);
+            uint256 _minted = _shareOf(_lock.minted, _amount, _locked);
             _lock.amount -= _amount;
             _lock.minted -= _minted;
             _burn(_msgSender(), _minted);
@@ -334,18 +361,18 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _amount,
         uint256 _id,
         address _to
-    ) external override {
+    ) external override returns (uint256 _newId) {
         LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
-        uint256 _vp = _share(_amount, _lock.amount);
+        uint256 _vp = _shareOf(_lock.minted, _amount, _lock.amount);
 
         require(_amount < _lock.amount, "Insufficient funds in Lock");
 
         // adjust lock before transfer
         _lock.amount = _amount;
         _lock.minted = _vp;
-
+        _newId = lockCount;
         // log the amount for the recipient - create new lock
-        _receiveLock(lockCount, _lock, _to);
+        _receiveLock(_newId, _lock, _to);
         // increase count
         lockCount += 1;
 
@@ -374,20 +401,19 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     /* ========== INTERNAL FUNCTIONS ========== */
 
     /**
-     * Extends the maturity
-     * Moves also the minted amounts
+     * Extends the maturity of one lock
      * @param _addr user
-     * @param _amount Amount to move from old end to end
-     * @param _end end of locked amount to move
+     * @param _id id of locked amount to move
      * @param _newEnd target end
      */
     function _extendMaturity(
         address _addr,
-        uint256 _amount,
-        uint256 _end,
+        uint256 _id,
         uint256 _newEnd
     ) internal lock {
-        LockedBalance storage _lock = lockedPositions[_addr][_end];
+        LockedBalance storage _lock = lockedPositions[_addr][_id];
+        require(_lock.end < _newEnd, "new end has to be later");
+        uint256 _amount = _lock.amount;
         uint256 _vp = _lock.minted;
         uint256 _vpAdded = getAdditionalAmountMinted(_amount, block.timestamp, _lock.end, _newEnd);
         uint256 _newLocked = _lock.amount + _amount;
@@ -396,9 +422,11 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         _newLocked = _lock.amount + _amount;
         uint256 _vpNew = _totalNewMinted >= _newLocked ? _newLocked : _totalNewMinted;
 
-        // increase on new
-        _lock.amount += _amount;
-        _lock.minted += _vpNew;
+        // set new minted amount
+        _lock.minted = _vpNew;
+
+        // adjust end
+        _lock.end = _newEnd;
 
         uint256 _vpDiff = _vpNew - _vp;
         require(_vpDiff > 0, "No benefit to lock");
@@ -406,9 +434,33 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     }
 
     /**
-     * Function to increase position for given _end
+     * Splits one lock into two. The new one gets an own id.
+     * Moves also the minted amounts
      * @param _addr user
-     * @param _value increase position for position in _end by value
+     * @param _amount Amount to move from original lock to new one
+     * @param _id id of locked amount to move
+     */
+    function _splitLock(
+        address _addr,
+        uint256 _amount,
+        uint256 _id,
+        address _recipient
+    ) internal returns (uint256 _newId) {
+        LockedBalance storage _lock = lockedPositions[_addr][_id];
+        uint256 _vp = _lock.minted;
+        uint256 _vpNew = _shareOf(_vp, _amount, _lock.amount);
+
+        // decrease on old lock
+        _lock.amount -= _amount;
+        _lock.minted -= _vpNew;
+
+        _newId = _addLock(_recipient, _amount, _vpNew, _lock.start, _lock.end);
+    }
+
+    /**
+     * Function to increase position for given _id
+     * @param _addr user
+     * @param _value increase position for position in _id by value
      * @param _id id of the position to increase
      */
     function _increasePosition(
@@ -418,10 +470,12 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     ) internal lock {
         uint256 _now = block.timestamp;
 
-        // calculate amount to mint
-        uint256 _vp = getAmountMinted(_value, _now, _id);
-
         LockedBalance storage _lock = lockedPositions[_msgSender()][_id];
+
+        uint256 _end = _lock.end;
+
+        // calculate amount to mint
+        uint256 _vp = getAmountMinted(_value, _now, _end);
 
         // increase locked amount
         _lock.amount += _value;
@@ -433,9 +487,9 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         _mint(_addr, _vp);
         _lock.minted += _vp;
 
-        lockedPositions[_msgSender()][_id] = _lock;
+        // lockedPositions[_msgSender()][_id] = _lock;
 
-        emit Deposit(_addr, _value, _id, _now);
+        emit Deposit(_addr, _value, _end, _now);
     }
 
     function _penalize(uint256 _amount) internal {
@@ -468,12 +522,13 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _minted,
         uint256 _start,
         uint256 _end
-    ) internal lock {
+    ) internal lock returns (uint256 _newId) {
+        _newId = lockCount;
         // assign lock for new id
-        lockedPositions[_addr][lockCount] = LockedBalance({amount: _amount, end: _end, minted: _minted, start: _start});
+        lockedPositions[_addr][_newId] = LockedBalance({amount: _amount, end: _end, minted: _minted, start: _start});
 
         // assign id to user
-        lockIds[_addr].add(lockCount);
+        lockIds[_addr].add(_newId);
 
         // increase count
         lockCount += 1;
@@ -507,12 +562,16 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
 
     /* ========== MATH HELPERS ========== */
 
-    function _mulDiv(uint256 a, uint256 b) private pure returns (uint256) {
+    function _mul(uint256 a, uint256 b) private pure returns (uint256) {
         return (a * b) / 1e18;
     }
 
-    function _share(uint256 a, uint256 b) private pure returns (uint256) {
-        return (a * 1e18) / b;
+    function _shareOf(
+        uint256 multiplier,
+        uint256 a,
+        uint256 b
+    ) private pure returns (uint256) {
+        return (a * multiplier) / b;
     }
 
     function _weightedSum(
@@ -549,10 +608,21 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         }
     }
 
+    /**
+     * @notice Allows the governor to the formula that determines the amount of tokens minted
+     * @param _curveProvider new provider
+     */
+    function setCurveProvider(address _curveProvider) external onlyGovernor {
+        require(_curveProvider != address(0), "invalid address");
+        curveProvider = _curveProvider;
+        emit CurveProviderSet(_curveProvider);
+    }
+
     /* =============== EVENTS ==================== */
     event Deposit(address indexed provider, uint256 value, uint256 locktime, uint256 timestamp);
     event Withdraw(address indexed provider, uint256 value, uint256 timestamp);
     event EarlyWithdrawPenaltySet(uint256 indexed penalty);
     event MinLockedAmountSet(uint256 indexed amount);
     event GovernorSet(address indexed governor);
+    event CurveProviderSet(address indexed curveProvider);
 }
