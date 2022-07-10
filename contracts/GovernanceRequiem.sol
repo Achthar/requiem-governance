@@ -236,12 +236,13 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      */
     function mergeLocks(uint256 _firstId, uint256 _secondId) external override returns (uint256 _remainingId) {
         require(_firstId != _secondId, "invalid Id constellation");
+        require(_lockExists(_msgSender(), _secondId) && _lockExists(_msgSender(), _firstId), "nothing to merge");
+        
         (uint256 _lateId, uint256 _earlyId) = lockedPositions[_msgSender()][_firstId].end > lockedPositions[_msgSender()][_secondId].end
             ? (_firstId, _secondId)
             : (_secondId, _firstId);
 
         LockedBalance memory _earlyLock = lockedPositions[_msgSender()][_earlyId];
-        require(_lockExists(_msgSender(), _secondId) && _lockExists(_msgSender(), _firstId), "nothing to merge");
         LockedBalance storage _lateLock = lockedPositions[_msgSender()][_lateId];
 
         uint256 _earlyAmount = _earlyLock.amount;

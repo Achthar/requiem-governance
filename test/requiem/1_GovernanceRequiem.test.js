@@ -638,4 +638,111 @@ contract('Governance Requiem Locks', function (accounts) {
     expect(count.toString()).to.equal('3');
   });
 
+  it('withdraws single full', async function () {
+
+    block = await ethers.provider.getBlock("latest");
+    currentTimestamp = block.timestamp;
+    end = currentTimestamp + maturity
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    const balBeforeWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    await network.provider.send("evm_increaseTime", [maturity + 100]);
+
+    // fetch lock pre
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [100]);
+
+
+    await this.token.connect(bob).withdraw(0, amount)
+
+    // fetch lock post
+    let newLocks = await this.token.getLocks(bob.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(1)
+    expect(newLocks.length).to.equal(0)
+
+    const firstAmount = await this.token.getTotalAmountLocked(bob.address)
+
+
+    const balAfterWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    // amount validation
+    expect(firstAmount.toString()).to.equal('0')
+    expect(balAfterWithdraw.sub(balBeforeWithdraw).toString()).to.equal(amount)
+
+    // voting power
+    const minted = await this.token.getUserMinted(bob.address)
+    const voting = await this.token.balanceOf(bob.address)
+
+    // validate via balances
+    expect(voting.toString()).to.equal('0')
+    expect(minted.toString()).to.equal('0')
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('1');
+  });
+
+
+  it('withdraws single partly', async function () {
+
+    block = await ethers.provider.getBlock("latest");
+    currentTimestamp = block.timestamp;
+    end = currentTimestamp + maturity
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    const balBeforeWithdraw = await this.lockedToken.balanceOf(bob.address)
+    const votingBeforeWithdraw = await this.token.balanceOf(bob.address)
+
+    await network.provider.send("evm_increaseTime", [maturity + 100]);
+
+    // fetch lock pre
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [100]);
+
+    const amountToWithdraw = '750000000000000000000' //5k
+    await this.token.connect(bob).withdraw(0, amountToWithdraw)
+
+    const votingAfterWithdraw = await this.token.balanceOf(bob.address)
+
+    // fetch lock post
+    let newLocks = await this.token.getLocks(bob.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(1)
+    expect(newLocks.length).to.equal(1)
+
+    const firstAmount = await this.token.getTotalAmountLocked(bob.address)
+
+
+    const balAfterWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    // amount validation
+    expect(firstAmount.toString()).to.equal('250000000000000000000')
+    expect(balAfterWithdraw.sub(balBeforeWithdraw).toString()).to.equal(amountToWithdraw)
+
+    // voting power
+    const minted = await this.token.getUserMinted(bob.address)
+    const voting = await this.token.balanceOf(bob.address)
+
+    // validate via balances
+    expect(voting.toString()).to.equal(newLocks[0].minted.toString())
+    expect(voting.toString()).to.equal(minted.toString())
+    expect(userLocks[0].minted.sub(newLocks[0].minted).toString()).to.equal(votingBeforeWithdraw.sub(votingAfterWithdraw).toString())
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('1');
+  });
+
 });
