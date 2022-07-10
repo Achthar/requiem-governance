@@ -66,11 +66,6 @@ contract('Governance Requiem Locks', function (accounts) {
 
   });
 
-  it('initial nonce', async function () {
-    expect((await this.token.nonces(bob.address)).toString()).to.equal('0');
-  });
-
-
   it('initial count and rate', async function () {
     // validate init count
     const count = await this.token.lockCount()
@@ -114,12 +109,77 @@ contract('Governance Requiem Locks', function (accounts) {
 
     userLocks = await this.token.getLocks(alice.address)
 
-    const lock = userLocks[0]
+    const userBalance = await this.token.balanceOf(alice.address)
 
+    const lock = userLocks[0]
+    expect(userBalance.toString()).to.equal(userLocks[0].minted.toString())
     expect(lock.amount.toString()).to.equal(amount);
     expect(Number(lock.end)).to.equal(end);
   });
 
+  it('lock views', async function () {
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    // create second lock
+    const amountSecond = '500000000000000000000' //5k
+    await this.token.connect(bob).createLock(amountSecond, end, bob.address)
+
+    await network.provider.send("evm_increaseTime", [100]);
+
+    const amountFourth = '750000000000000000000' //5k
+    await this.token.connect(carol).createLock(amountFourth, end, carol.address)
+
+    const amountThird = '750000000000000000000' //5k
+    await this.token.connect(bob).createLock(amountThird, end, bob.address)
+
+    // fetch lock
+    userLocks = await this.token.getLocks(bob.address)
+
+    let otherUserLocks = await this.token.getLocks(carol.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(3)
+    expect(otherUserLocks.length).to.equal(1)
+
+    const firstAmount = await this.token.getTotalAmountLocked(bob.address)
+    const secondAmount = await this.token.getTotalAmountLocked(carol.address)
+
+
+    // amount validation
+    expect(firstAmount.toString()).to.equal('2250000000000000000000')
+    expect(secondAmount.toString()).to.equal(amountFourth)
+
+    // indexes
+    const firstIndexes = await this.token.getUserIndexes(bob.address)
+    const secondIndexes = await this.token.getUserIndexes(carol.address)
+
+    //lock should have target amount
+    const expIndexes = ['0', '1', '3']
+    firstIndexes.map((x, index) => expect(x.toString()).to.equal(expIndexes[index]))
+
+    expect(secondIndexes[0].toString()).to.equal('2');
+    expect(secondIndexes.length).to.equal(1);
+
+    // voting power
+    const firstMinted = await this.token.getUserMinted(bob.address)
+    const secondMinted = await this.token.getUserMinted(carol.address)
+
+    const balFirst = await this.token.balanceOf(bob.address)
+    const balSecond = await this.token.balanceOf(carol.address)
+
+    // validate via balances
+    expect(firstMinted.toString()).to.equal(balFirst.toString())
+    expect(secondMinted.toString()).to.equal(balSecond.toString())
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('4');
+  });
 
   it('increase of locked amount', async function () {
     const amount = '1000000000000000000000' //10k
@@ -500,7 +560,7 @@ contract('Governance Requiem Locks', function (accounts) {
     await this.token.connect(bob).transferLock(amount, 0, carol.address, true)
 
     const balance = await this.token.balanceOf(carol.address)
-    
+
     // minted amound should have increased
     expect(balance.toString()).to.equal(userLocks[0].minted.toString());
   });
@@ -527,6 +587,55 @@ contract('Governance Requiem Locks', function (accounts) {
 
     // minted should be balance
     expect(newLock.minted.toString()).to.equal(balance.toString());
+  });
+
+  it('withdraws full', async function () {
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    // create second lock
+    const amountSecond = '500000000000000000000' //5k
+    await this.token.connect(bob).createLock(amountSecond, lateEnd, bob.address)
+
+    await network.provider.send("evm_increaseTime", [maturity]);
+
+    const amountThird = '750000000000000000000' //5k
+    await this.token.connect(bob).createLock(amountThird, lateEnd, bob.address)
+
+    // fetch lock pre
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [100]);
+
+    await this.token.connect(bob).withdrawAll()
+
+    // fetch lock post
+    let newLocks = await this.token.getLocks(bob.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(3)
+    expect(newLocks.length).to.equal(2)
+
+    const firstAmount = await this.token.getTotalAmountLocked(bob.address)
+
+    // amount validation
+    expect(firstAmount.toString()).to.equal('1250000000000000000000')
+
+    // voting power
+    const minted = await this.token.getUserMinted(bob.address)
+    const voting = await this.token.balanceOf(bob.address)
+
+    // validate via balances
+    expect(voting.toString()).to.equal(userLocks[1].minted.add(userLocks[2].minted).toString())
+    expect(minted.toString()).to.equal(userLocks[1].minted.add(userLocks[2].minted).toString())
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('3');
   });
 
 });

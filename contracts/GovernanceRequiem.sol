@@ -96,7 +96,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      * @param _addr user address
      * @return _votingPower the total voting power for given address
      */
-    function getVotingPower(address _addr) external view returns (uint256 _votingPower) {
+    function getUserMinted(address _addr) external view returns (uint256 _votingPower) {
         for (uint256 i = 0; i < lockIds[_addr].length(); i++) {
             uint256 _id = lockIds[_addr].at(i);
             _votingPower += lockedPositions[_addr][_id].minted;
@@ -160,6 +160,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         address _recipient
     ) external override returns (uint256 _newId) {
         uint256 _now = block.timestamp;
+        require(_end > _now, "invalid end");
         uint256 _duration = _end - _now;
         require(_value >= minLockedAmount, "< min amount");
         require(_duration >= MINTIME, "< MINTIME");
@@ -278,18 +279,16 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      */
     function withdrawAll() external {
         for (uint256 i = 0; i < lockIds[_msgSender()].length(); i++) {
-            uint256 _end = lockIds[_msgSender()].at(i);
-            LockedBalance storage _lock = lockedPositions[_msgSender()][_end];
+            uint256 _id = lockIds[_msgSender()].at(i);
+            LockedBalance storage _lock = lockedPositions[_msgSender()][_id];
             uint256 _locked = _lock.amount;
             uint256 _now = block.timestamp;
-            if (_locked > 0 && _now >= _end) {
-                uint256 _minted = _lock.minted;
-
+            if (_locked > 0 && _now >= _lock.end) {
                 // burn minted amount
-                _burn(_msgSender(), _minted);
+                _burn(_msgSender(),  _lock.minted);
 
                 // delete lock entry
-                _deleteLock(_msgSender(), _end);
+                _deleteLock(_msgSender(), _id);
 
                 IERC20(lockedToken).safeTransfer(_msgSender(), _locked);
 
