@@ -6,6 +6,7 @@ import "./token/ERC20/extensions/ERC20Burnable.sol";
 import "./token/ERC20/extensions/ERC20Votes.sol";
 import "./token/ERC20/utils/SafeERC20.sol";
 import "./libraries/structs/EnumerableSet.sol";
+import "./access/Ownable.sol";
 import "./interfaces/governance/IGovernanceRequiem.sol";
 import "./interfaces/governance/ICurveProvider.sol";
 import "./LockKeeper.sol";
@@ -15,7 +16,7 @@ import "./LockKeeper.sol";
 /// @title Requiem Governance Token
 /// @author Achthar
 
-contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, LockKeeper {
+contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, LockKeeper, Ownable {
     using SafeERC20 for IERC20;
     using EnumerableSet for EnumerableSet.UintSet;
 
@@ -29,7 +30,6 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     uint256 public constant MAX_WITHDRAWAL_PENALTY = 50000; // 50%
     uint256 public constant PRECISION = 100000; // 5 decimals
 
-    address public governor;
     address public curveProvider;
     address public lockedToken;
     uint256 public minLockedAmount;
@@ -44,24 +44,18 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         _unlocked = 1;
     }
 
-    modifier onlyGovernor() {
-        require(_msgSender() == governor, "only Governance");
-        _;
-    }
-
     constructor(
         string memory _name,
         string memory _symbol,
         address _lockedToken,
         address _curveProvider,
         uint256 _minLockedAmount
-    ) ERC20(_name, _symbol) ERC20Permit(_name) {
+    ) ERC20(_name, _symbol) ERC20Permit(_name) Ownable() {
         lockedToken = _lockedToken;
         minLockedAmount = _minLockedAmount;
         earlyWithdrawPenaltyRate = 30000; // 30%
         _unlocked = 1;
         curveProvider = _curveProvider;
-        governor = _msgSender();
     }
 
     /* ========== PUBLIC FUNCTIONS ========== */
@@ -227,7 +221,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _id,
         address _recipient
     ) external override returns (uint256 _newId) {
-        require(_amount >= minLockedAmount, "< min amount");
+        require(_amount >= minLockedAmount, "< min amount for new lock");
         _newId = _splitLock(_msgSender(), _amount, _id, _recipient);
     }
 
@@ -317,6 +311,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
             // delete lock entry
             _deleteLock(_msgSender(), _id);
         } else if (_amount < _locked) {
+            require(_locked - _amount >= minLockedAmount, "< min amount left in lock");
             uint256 _minted = _shareOf(_lock.minted, _amount, _locked);
             _lock.amount -= _amount;
             _lock.minted -= _minted;
@@ -399,6 +394,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     ) external override returns (uint256 _receivedId) {
         LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
         require(_amount <= _lock.amount, "Insufficient funds in Lock");
+        require(_amount >= minLockedAmount, "< min amount");
         uint256 _vpToSend;
         if (_amount == _lock.amount) {
             // log the amount for the recipient
@@ -483,6 +479,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         address _recipient
     ) internal returns (uint256 _newId) {
         LockedBalance storage _lock = lockedPositions[_addr][_id];
+        require(_lock.amount - _amount >= minLockedAmount, "< min amount for existing lock");
         uint256 _vp = _lock.minted;
         uint256 _vpNew = _shareOf(_vp, _amount, _lock.amount);
 
@@ -621,17 +618,12 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
 
     /* ========== RESTRICTED FUNCTIONS ========== */
 
-    function setGovernor(address _newGovernor) external onlyGovernor {
-        governor = _newGovernor;
-        emit GovernorSet(_newGovernor);
-    }
-
     /**
      * @notice Allows the governor to set the parameters for locks
      * @param _earlyWithdrawPenaltyRate new penalty rate
      * @param _minLockedAmount new minimum locked amount
      */
-    function setParams(uint256 _earlyWithdrawPenaltyRate, uint256 _minLockedAmount) external onlyGovernor {
+    function setParams(uint256 _earlyWithdrawPenaltyRate, uint256 _minLockedAmount) external onlyOwner {
         if (earlyWithdrawPenaltyRate != _earlyWithdrawPenaltyRate) {
             require(_earlyWithdrawPenaltyRate <= MAX_WITHDRAWAL_PENALTY, "penalty too high");
             earlyWithdrawPenaltyRate = _earlyWithdrawPenaltyRate;
@@ -648,7 +640,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      * @notice Allows the governor to the formula that determines the amount of tokens minted
      * @param _curveProvider new provider
      */
-    function setCurveProvider(address _curveProvider) external onlyGovernor {
+    function setCurveProvider(address _curveProvider) external onlyOwner {
         require(_curveProvider != address(0), "invalid address");
         curveProvider = _curveProvider;
         emit CurveProviderSet(_curveProvider);
