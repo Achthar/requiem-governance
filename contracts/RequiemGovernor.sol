@@ -3,7 +3,7 @@
 pragma solidity ^0.8.15;
 
 import "./Governor.sol";
-import "./interfaces/governance/IGovernanceLock.sol";
+import "./utils/IVotes.sol";
 import "./interfaces/IERC20.sol";
 import "./access/Ownable.sol";
 import "./compatibility/GovernorCompatibilityBravo.sol";
@@ -106,6 +106,6 @@ contract RequiemGovernor is Ownable, Governor, GovernorCompatibilityBravo, Gover
         bytes memory
     ) internal view override(Governor, GovernorVotes) returns (uint256) {
         address tokenAddress = address(token);
-        return IGovernanceLock(tokenAddress).getVotingPower(account);
+        return IVotes(tokenAddress).getVotes(account);
     }
 }
