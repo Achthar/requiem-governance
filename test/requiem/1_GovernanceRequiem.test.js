@@ -39,7 +39,7 @@ contract('Governance Requiem Locks', function (accounts) {
 
   beforeEach(async function () {
     [deployer, alice, bob, carol] = await ethers.getSigners();
-    const factoryLocked = await ethers.getContractFactory('ERC20Mock')
+    const factoryLocked = await ethers.getContractFactory('ERC20BurnableMock')
     const factoryVote = await ethers.getContractFactory('GovernanceRequiemMock')
     const factoryCurveProvder = await ethers.getContractFactory('MockCurveProvider')
 
@@ -669,7 +669,6 @@ contract('Governance Requiem Locks', function (accounts) {
 
     const firstAmount = await this.token.getTotalAmountLocked(bob.address)
 
-
     const balAfterWithdraw = await this.lockedToken.balanceOf(bob.address)
 
     // amount validation
@@ -739,6 +738,170 @@ contract('Governance Requiem Locks', function (accounts) {
     expect(voting.toString()).to.equal(newLocks[0].minted.toString())
     expect(voting.toString()).to.equal(minted.toString())
     expect(userLocks[0].minted.sub(newLocks[0].minted).toString()).to.equal(votingBeforeWithdraw.sub(votingAfterWithdraw).toString())
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('1');
+  });
+
+  it('emergency withdraws full', async function () {
+    block = await ethers.provider.getBlock("latest");
+    currentTimestamp = block.timestamp;
+    end = currentTimestamp + maturity
+    lateEnd = end + maturity
+
+
+    const penaltyRate = await this.token.earlyWithdrawPenaltyRate()
+    const precistion = await this.token.PRECISION()
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    await network.provider.send("evm_increaseTime", [1000]);
+
+    // create second lock
+    const amountSecond = '500000000000000000000' //5k
+    await this.token.connect(bob).createLock(amountSecond, lateEnd, bob.address)
+
+    await network.provider.send("evm_increaseTime", [maturity]);
+
+    const amountThird = '750000000000000000000' //5k
+    await this.token.connect(bob).createLock(amountThird, lateEnd, bob.address)
+    const totalAmountPreWithdraw = await this.token.getTotalAmountLocked(bob.address)
+
+    const balBeforeWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    // fetch lock pre
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [100]);
+
+    await this.token.connect(bob).emergencyWithdrawAll()
+
+    const balAfterWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    // fetch lock post
+    let newLocks = await this.token.getLocks(bob.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(3)
+    expect(newLocks.length).to.equal(0)
+    const penalty = (penaltyRate.mul(amountSecond).div(precistion)).add(penaltyRate.mul(amountThird).div(precistion))
+    const totalAmount = await this.token.getTotalAmountLocked(bob.address)
+    const balDiff = balAfterWithdraw.sub(balBeforeWithdraw)
+    // amount validation
+    expect(totalAmount.toString()).to.equal('0')
+    expect(balDiff.toString()).to.equal(totalAmountPreWithdraw.sub(penalty).toString())
+    // voting power
+    const minted = await this.token.getUserMinted(bob.address)
+    const voting = await this.token.balanceOf(bob.address)
+
+    // validate via balances
+    expect(voting.toString()).to.equal('0')
+    expect(minted.toString()).to.equal('0')
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('3');
+  });
+
+
+  it('emergency withdraws single expired', async function () {
+
+    block = await ethers.provider.getBlock("latest");
+    currentTimestamp = block.timestamp;
+    end = currentTimestamp + maturity
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    const balBeforeWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    await network.provider.send("evm_increaseTime", [maturity + 100]);
+
+    // fetch lock pre
+    userLocks = await this.token.getLocks(bob.address)
+
+    await network.provider.send("evm_increaseTime", [100]);
+
+
+    await this.token.connect(bob).emergencyWithdraw(0)
+
+    // fetch lock post
+    let newLocks = await this.token.getLocks(bob.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(1)
+    expect(newLocks.length).to.equal(0)
+
+    const firstAmount = await this.token.getTotalAmountLocked(bob.address)
+
+    const balAfterWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    // amount validation
+    expect(firstAmount.toString()).to.equal('0')
+    expect(balAfterWithdraw.sub(balBeforeWithdraw).toString()).to.equal(amount)
+
+    // voting power
+    const minted = await this.token.getUserMinted(bob.address)
+    const voting = await this.token.balanceOf(bob.address)
+
+    // validate via balances
+    expect(voting.toString()).to.equal('0')
+    expect(minted.toString()).to.equal('0')
+
+    // count should be unchanged
+    let count = await this.token.lockCount()
+    expect(count.toString()).to.equal('1');
+  });
+
+  it('emergency withdraws single with penalty', async function () {
+
+    block = await ethers.provider.getBlock("latest");
+    currentTimestamp = block.timestamp;
+    end = currentTimestamp + maturity
+
+
+    const penaltyRate = await this.token.earlyWithdrawPenaltyRate()
+    const precistion = await this.token.PRECISION()
+
+    // create first lock
+    const amount = '1000000000000000000000' //10k
+    await this.token.connect(bob).createLock(amount, end, bob.address)
+
+    const balBeforeWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    await network.provider.send("evm_increaseTime", [maturity - 100]);
+
+    // fetch lock pre
+    userLocks = await this.token.getLocks(bob.address)
+
+    await this.token.connect(bob).emergencyWithdraw(0)
+
+    // fetch lock post
+    let newLocks = await this.token.getLocks(bob.address)
+
+    // length validation
+    expect(userLocks.length).to.equal(1)
+    expect(newLocks.length).to.equal(0)
+
+    const firstAmount = await this.token.getTotalAmountLocked(bob.address)
+
+    const balAfterWithdraw = await this.lockedToken.balanceOf(bob.address)
+
+    // amount validation
+    expect(firstAmount.toString()).to.equal('0')
+    expect(balAfterWithdraw.sub(balBeforeWithdraw).toString()).to.equal(ethers.BigNumber.from(amount).sub(penaltyRate.mul(amount).div(precistion)).toString())
+
+    // voting power
+    const minted = await this.token.getUserMinted(bob.address)
+    const voting = await this.token.balanceOf(bob.address)
+
+    // validate via balances
+    expect(voting.toString()).to.equal('0')
+    expect(minted.toString()).to.equal('0')
 
     // count should be unchanged
     let count = await this.token.lockCount()

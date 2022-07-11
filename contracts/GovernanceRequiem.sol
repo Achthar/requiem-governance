@@ -83,7 +83,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      * @param _addr user address
      * @return _indexes indexes for user
      */
-    function getUserIndexes(address _addr) external view returns (uint256[] memory _indexes) {
+    function getUserIndexes(address _addr) public view returns (uint256[] memory _indexes) {
         uint256 _count = lockIds[_addr].length();
         _indexes = new uint256[](_count);
         for (uint256 i = 0; i < _count; i++) {
@@ -237,7 +237,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
     function mergeLocks(uint256 _firstId, uint256 _secondId) external override returns (uint256 _remainingId) {
         require(_firstId != _secondId, "invalid Id constellation");
         require(_lockExists(_msgSender(), _secondId) && _lockExists(_msgSender(), _firstId), "nothing to merge");
-        
+
         (uint256 _lateId, uint256 _earlyId) = lockedPositions[_msgSender()][_firstId].end > lockedPositions[_msgSender()][_secondId].end
             ? (_firstId, _secondId)
             : (_secondId, _firstId);
@@ -279,14 +279,15 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      * @notice Withdraws from all locks whenever possible
      */
     function withdrawAll() external {
-        for (uint256 i = 0; i < lockIds[_msgSender()].length(); i++) {
-            uint256 _id = lockIds[_msgSender()].at(i);
+        uint256[] memory _ids = getUserIndexes(_msgSender());
+        for (uint256 i = 0; i < _ids.length; i++) {
+            uint256 _id = _ids[i];
             LockedBalance storage _lock = lockedPositions[_msgSender()][_id];
             uint256 _locked = _lock.amount;
             uint256 _now = block.timestamp;
             if (_locked > 0 && _now >= _lock.end) {
                 // burn minted amount
-                _burn(_msgSender(),  _lock.minted);
+                _burn(_msgSender(), _lock.minted);
 
                 // delete lock entry
                 _deleteLock(_msgSender(), _id);
@@ -360,12 +361,13 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
      */
     function emergencyWithdrawAll() external {
         uint256 _now = block.timestamp;
-        for (uint256 i = 0; i < lockIds[_msgSender()].length(); i++) {
-            uint256 _end = lockIds[_msgSender()].at(i);
-            LockedBalance memory _lock = lockedPositions[_msgSender()][_end];
+        uint256[] memory _ids = getUserIndexes(_msgSender());
+        for (uint256 i = 0; i < _ids.length; i++) {
+            uint256 _id = _ids[i];
+            LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
             uint256 _locked = _lock.amount;
             if (_locked > 0) {
-                if (_now < _end) {
+                if (_now < _lock.end) {
                     uint256 _fee = (_locked * earlyWithdrawPenaltyRate) / PRECISION;
                     _penalize(_fee);
                     _locked -= _fee;
@@ -374,7 +376,7 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
                 _burn(_msgSender(), _lock.minted);
 
                 // delete lock
-                _deleteLock(_msgSender(), _end);
+                _deleteLock(_msgSender(), _id);
 
                 IERC20(lockedToken).safeTransfer(_msgSender(), _locked);
 
