@@ -17,7 +17,7 @@ async function main() {
     const GovernanceRequiem = await ethers.getContractFactory('GovernanceRequiem')
 
     const curveProvider = await CurveProvider.deploy()
-    const governanceRequiem = await GovernanceRequiem.deploy("Governance Requiem", "gREQ", reqAddress, curveProvider.address, '10000000000000000')
+    const governanceRequiem = await GovernanceRequiem.deploy("Governance Requiem", "gREQ", reqAddress, curveProvider.address, ethers.BigNumber.from(10).pow(16))
 
     console.log('CurveProvider:', curveProvider.address)
     console.log('GovernanceRequiem:', governanceRequiem.address)
