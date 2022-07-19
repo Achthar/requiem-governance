@@ -129,13 +129,16 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _startTime,
         uint256 _unlockTime
     ) public view returns (uint256) {
-        if (_unlockTime - _startTime > MAXTIME) return _value;
+        // start time has to be adjusted if _start time is in the past
+        uint256 _adjustedStart = _now > _startTime ? _now : _startTime;
+        if (_unlockTime - _adjustedStart > MAXTIME) return _value;
+
         return
             (_value *
                 ICurveProvider(curveProvider).forwardRate(
                     MAXTIME,
                     _now,
-                    _startTime,
+                    _adjustedStart,
                     _unlockTime,
                     IERC20(lockedToken).totalSupply(),
                     this.totalSupply()
@@ -444,10 +447,11 @@ contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, Loc
         uint256 _newEnd
     ) internal lock {
         LockedBalance storage _lock = lockedPositions[_addr][_id];
-        require(_lock.end < _newEnd, "new end has to be later");
+        uint256 _lockEnd = _lock.end;
+        require(_lockEnd < _newEnd, "new end has to be later");
         uint256 _amount = _lock.amount;
         uint256 _vp = _lock.minted;
-        uint256 _vpAdded = getAdditionalAmountMinted(_amount, block.timestamp, _lock.end, _newEnd);
+        uint256 _vpAdded = getAdditionalAmountMinted(_amount, block.timestamp, _lockEnd, _newEnd);
         uint256 _newLocked = _lock.amount + _amount;
 
         uint256 _totalNewMinted = _vp + _vpAdded;
