@@ -90,6 +90,7 @@
     "yargs": "^17.0.0"
   },
   "dependencies": {
-    "@nomiclabs/hardhat-waffle": "^2.0.3"
+    "@nomiclabs/hardhat-waffle": "^2.0.3",
+    "dotenv": "^16.0.1"
   }
 }

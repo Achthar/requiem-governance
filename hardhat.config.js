@@ -6,6 +6,7 @@
 // - COMPILE_VERSION:   compiler version (default: 0.8.9)
 // - COINMARKETCAP:     coinmarkercat api key for USD value in gas report
 require("@nomiclabs/hardhat-ethers");
+require('dotenv').config()
 const fs = require('fs');
 const path = require('path');
 const argv = require('yargs/yargs')()
@@ -56,6 +57,9 @@ for (const f of fs.readdirSync(path.join(__dirname, 'hardhat'))) {
 
 const withOptimizations = argv.enableGasReport || argv.compileMode === 'production';
 
+const pk1 = process.env.PK_1 || '';
+const pk2 = process.env.PK_2 || '';
+
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
@@ -73,6 +77,30 @@ module.exports = {
     hardhat: {
       blockGasLimit: 10000000,
       allowUnlimitedContractSize: !withOptimizations,
+    },
+
+
+    fuji: {
+      url: 'https://api.avax-test.network/ext/bc/C/rpc',
+      accounts: [pk1, pk2],
+      chainId: 43113,
+      live: true,
+      saveDeployments: true,
+      // tags: ['staging'],
+      // gasMultiplier: 4,
+      // gas: 800000000,
+      // gasPrice: 25000000000,
+    },
+    'oasis-test': {
+      url: 'https://testnet.emerald.oasis.dev',
+      accounts: [pk1, pk2],
+      chainId: 42261,
+      live: true,
+      saveDeployments: true,
+      // tags: ['staging'],
+      // gasMultiplier: 4,
+      gas: 800000,
+      gasPrice: 2500000000,
     },
   },
   gasReporter: {

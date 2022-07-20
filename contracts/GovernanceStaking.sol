@@ -5,7 +5,6 @@ pragma solidity 0.8.15;
 import "./token/ERC20/ERC20.sol";
 import "./token/ERC20/utils/SafeERC20.sol";
 import "./access/Ownable.sol";
-import "./interfaces/reward/IRewarder.sol";
 import "./security/ReentrancyGuard.sol";
 
 // solhint-disable max-line-length
