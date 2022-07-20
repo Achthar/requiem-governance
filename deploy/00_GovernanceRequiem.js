@@ -29,7 +29,7 @@ async function main() {
     console.log("deploy governance logic")
     const governanceRequiem = await GovernanceRequiem.deploy()
 
-        console.log("deploy Proxy")
+    console.log("deploy Proxy")
     const proxy = await TransparentUpgradeableProxy.deploy(governanceRequiem.address, admin.address, Buffer.from(""))
 
 

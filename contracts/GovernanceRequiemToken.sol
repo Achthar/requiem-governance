@@ -2,24 +2,24 @@
 
 pragma solidity ^0.8.15;
 
-import "./token/ERC20/extensions/ERC20Burnable.sol";
-import "./token/ERC20/extensions/ERC20Votes.sol";
-import "./token/ERC20/utils/SafeERC20.sol";
-import "./libraries/structs/EnumerableSet.sol";
-import "./access/Ownable.sol";
-import "./proxy/utils/Initializable.sol";
+import "./upgradeable/ERC20/extensions/ERC20BurnableUpgradeable.sol";
+import "./upgradeable/ERC20/extensions/ERC20VotesUpgradeable.sol";
+import "./upgradeable/ERC20/utils/SafeERC20Upgradeable.sol";
+import "./upgradeable/utils/structs/EnumerableSetUpgradeable.sol";
+import "./upgradeable/access/OwnableUpgradeable.sol";
 import "./interfaces/governance/IGovernanceRequiem.sol";
 import "./interfaces/governance/ICurveProvider.sol";
-import "./LockKeeper.sol";
+import "./interfaces/governance/ILockKeeper.sol";
+import "./upgradeable/ERC20/IERC20Upgradeable.sol";
 
 // solhint-disable max-line-length
 
 /// @title Requiem Governance Token
 /// @author Achthar
 
-contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable, LockKeeper, Ownable, Initializable {
-    using SafeERC20 for IERC20;
-    using EnumerableSet for EnumerableSet.UintSet;
+contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20BurnableUpgradeable, ERC20VotesUpgradeable, OwnableUpgradeable {
+    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using EnumerableSetUpgradeable for EnumerableSetUpgradeable.UintSet;
 
     // flags
     uint256 private _unlocked;
@@ -35,6 +35,16 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
     uint256 public minLockedAmount;
     uint256 public earlyWithdrawPenaltyRate;
 
+    // lock variables
+    // counter to generate ids for locks
+    uint256 public lockCount;
+
+    // user address -> end times -> locked position
+    mapping(address => mapping(uint256 => LockedBalance)) public lockedPositions;
+
+    // tracks the ids for locks per user
+    mapping(address => EnumerableSetUpgradeable.UintSet) internal lockIds;
+
     /* ========== MODIFIERS ========== */
 
     modifier lock() {
@@ -44,13 +54,22 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
         _unlocked = 1;
     }
 
-    constructor(
+    constructor() {}
+
+    function initialize(
         string memory _name,
         string memory _symbol,
         address _lockedToken,
         address _curveProvider,
         uint256 _minLockedAmount
-    ) ERC20(_name, _symbol) ERC20Permit(_name) Ownable() {
+    ) public initializer {
+        __ERC20_init(_name, _symbol);
+        __Ownable_init();
+        __Context_init();
+        __ERC20Burnable_init();
+        __ERC20Permit_init(_name);
+        __ERC20Votes_init();
+        
         lockedToken = _lockedToken;
         minLockedAmount = _minLockedAmount;
         earlyWithdrawPenaltyRate = 30000; // 30%
@@ -111,8 +130,14 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
     ) public view returns (uint256) {
         if (_unlockTime - _startTime > MAXTIME) return _value;
         return
-            (_value * ICurveProvider(curveProvider).rate(MAXTIME, _startTime, _unlockTime, IERC20(lockedToken).totalSupply(), this.totalSupply())) /
-            1e18;
+            (_value *
+                ICurveProvider(curveProvider).rate(
+                    MAXTIME,
+                    _startTime,
+                    _unlockTime,
+                    IERC20Upgradeable(lockedToken).totalSupply(),
+                    this.totalSupply()
+                )) / 1e18;
     }
 
     /**
@@ -140,7 +165,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
                     _now,
                     _adjustedStart,
                     _unlockTime,
-                    IERC20(lockedToken).totalSupply(),
+                    IERC20Upgradeable(lockedToken).totalSupply(),
                     this.totalSupply()
                 )) / 1e18;
     }
@@ -166,7 +191,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
         uint256 _vp = getAmountMinted(_value, _now, _end);
         require(_vp > 0, "No benefit to lock");
 
-        IERC20(lockedToken).safeTransferFrom(_msgSender(), address(this), _value);
+        IERC20Upgradeable(lockedToken).safeTransferFrom(_msgSender(), address(this), _value);
         _mint(_recipient, _vp);
 
         _newId = _addLock(_recipient, _value, _vp, _now, _end);
@@ -289,7 +314,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
                 // delete lock entry
                 _deleteLock(_msgSender(), _id);
 
-                IERC20(lockedToken).safeTransfer(_msgSender(), _locked);
+                IERC20Upgradeable(lockedToken).safeTransfer(_msgSender(), _locked);
 
                 emit Withdraw(_msgSender(), _locked, _now);
             }
@@ -323,7 +348,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
             revert("insufficient amount in lock");
         }
 
-        IERC20(lockedToken).safeTransfer(_msgSender(), _amount);
+        IERC20Upgradeable(lockedToken).safeTransfer(_msgSender(), _amount);
 
         emit Withdraw(_msgSender(), _amount, _now);
     }
@@ -349,7 +374,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
         // remove lock
         _deleteLock(_msgSender(), _id);
 
-        IERC20(lockedToken).safeTransfer(_msgSender(), _amount);
+        IERC20Upgradeable(lockedToken).safeTransfer(_msgSender(), _amount);
 
         emit Withdraw(_msgSender(), _amount, _now);
     }
@@ -376,7 +401,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
                 // delete lock
                 _deleteLock(_msgSender(), _id);
 
-                IERC20(lockedToken).safeTransfer(_msgSender(), _locked);
+                IERC20Upgradeable(lockedToken).safeTransfer(_msgSender(), _locked);
 
                 emit Withdraw(_msgSender(), _locked, _now);
             }
@@ -431,6 +456,35 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
         }
 
         if (_sendTokens) this.transferFrom(_msgSender(), _to, _vpToSend);
+    }
+
+    /* ========== PUBLIC FUNCTIONS LOCK KEEER ========== */
+
+    /**
+     * Gets lock data for user
+     * @param _addr user to get data of
+     * @return _balances LockedBalance aray for user
+     */
+    function getLocks(address _addr) external view override returns (LockedBalance[] memory _balances) {
+        uint256 length = lockIds[_addr].length();
+        _balances = new LockedBalance[](length);
+        for (uint256 i = 0; i < length; i++) {
+            _balances[i] = lockedPositions[_addr][lockIds[_addr].at(i)];
+        }
+    }
+
+    /**
+     * Cheks whether a lock exists
+     * @param _addr user to get data of
+     * @param _end expiry of lock
+     * @return true if lock exists, false if not
+     */
+    function lockExists(address _addr, uint256 _end) external view override returns (bool) {
+        return _lockExists(_addr, _end);
+    }
+
+    function _lockExists(address _addr, uint256 _id) internal view returns (bool) {
+        return lockIds[_addr].contains(_id);
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -519,7 +573,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
 
         require(_vp > 0, "No benefit to lock");
 
-        IERC20(lockedToken).safeTransferFrom(_msgSender(), address(this), _value);
+        IERC20Upgradeable(lockedToken).safeTransferFrom(_msgSender(), address(this), _value);
 
         _mint(_addr, _vp);
         _lock.minted += _vp;
@@ -530,7 +584,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
     }
 
     function _penalize(uint256 _amount) internal {
-        ERC20Burnable(lockedToken).burn(_amount);
+        ERC20BurnableUpgradeable(lockedToken).burn(_amount);
     }
 
     /**
@@ -581,11 +635,11 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
 
     /* ========== OVERRIDES ========== */
 
-    function _mint(address account, uint256 amount) internal virtual override(ERC20, ERC20Votes) {
+    function _mint(address account, uint256 amount) internal virtual override(ERC20Upgradeable, ERC20VotesUpgradeable) {
         super._mint(account, amount);
     }
 
-    function _burn(address account, uint256 amount) internal virtual override(ERC20, ERC20Votes) {
+    function _burn(address account, uint256 amount) internal virtual override(ERC20Upgradeable, ERC20VotesUpgradeable) {
         super._burn(account, amount);
     }
 
@@ -593,7 +647,7 @@ contract GovernanceRequiemToken is IGovernanceRequiem, ERC20Votes, ERC20Burnable
         address from,
         address to,
         uint256 amount
-    ) internal virtual override(ERC20, ERC20Votes) {
+    ) internal virtual override(ERC20Upgradeable, ERC20VotesUpgradeable) {
         super._afterTokenTransfer(from, to, amount);
     }
 

@@ -10,6 +10,8 @@ import "../../utils/math/SafeCastUpgradeable.sol";
 import "../../utils/cryptography/ECDSAUpgradeable.sol";
 import "../../../proxy/utils/Initializable.sol";
 
+// solhint-disable max-line-length
+
 /**
  * @dev Extension of ERC20 to support Compound-like voting and delegation. This version is more generic than Compound's,
  * and supports token supply up to 2^224^ - 1, while COMP is limited to 2^96^ - 1.
