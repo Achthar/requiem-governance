@@ -69,7 +69,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         __ERC20Burnable_init();
         __ERC20Permit_init(_name);
         __ERC20Votes_init();
-        
+
         lockedToken = _lockedToken;
         minLockedAmount = _minLockedAmount;
         earlyWithdrawPenaltyRate = 30000; // 30%
@@ -180,7 +180,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _value,
         uint256 _end,
         address _recipient
-    ) external override returns (uint256 _newId) {
+    ) external override lock returns (uint256 _newId) {
         uint256 _now = block.timestamp;
         require(_end > _now, "invalid end");
         uint256 _duration = _end - _now;
@@ -207,7 +207,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _amount,
         uint256 _id,
         uint256 _newEnd
-    ) external override returns (uint256 _newId) {
+    ) external override lock returns (uint256 _newId) {
         uint256 _now = block.timestamp;
         uint256 _duration = _newEnd - _now;
         require(_duration >= MINTIME, "< MINTIME");
@@ -233,7 +233,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _value,
         uint256 _id,
         address _recipient
-    ) external override {
+    ) external override lock {
         require(_value >= minLockedAmount, "< min amount");
         _increasePosition(_recipient, _value, _id);
     }
@@ -248,7 +248,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _amount,
         uint256 _id,
         address _recipient
-    ) external override returns (uint256 _newId) {
+    ) external override lock returns (uint256 _newId) {
         require(_amount >= minLockedAmount, "< min amount for new lock");
         _newId = _splitLock(_msgSender(), _amount, _id, _recipient);
     }
@@ -256,7 +256,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
     /**
      * @notice Merges two locks of the user. The one with the lower maturity will be extended to match the other.
      */
-    function mergeLocks(uint256 _firstId, uint256 _secondId) external override returns (uint256 _remainingId) {
+    function mergeLocks(uint256 _firstId, uint256 _secondId) external override lock returns (uint256 _remainingId) {
         require(_firstId != _secondId, "invalid Id constellation");
         require(_lockExists(_msgSender(), _secondId) && _lockExists(_msgSender(), _firstId), "nothing to merge");
 
@@ -326,7 +326,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
      * @param _id id of the position to increase
      * @param _amount amount to withdraw fromn lock
      */
-    function withdraw(uint256 _id, uint256 _amount) external {
+    function withdraw(uint256 _id, uint256 _amount) external lock {
         LockedBalance storage _lock = lockedPositions[_msgSender()][_id];
         uint256 _now = block.timestamp;
         uint256 _locked = _lock.amount;
@@ -419,7 +419,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _id,
         address _to,
         bool _sendTokens
-    ) external override returns (uint256 _receivedId) {
+    ) external override lock returns (uint256 _receivedId) {
         LockedBalance memory _lock = lockedPositions[_msgSender()][_id];
         require(_amount <= _lock.amount, "Insufficient funds in Lock");
         require(_amount >= minLockedAmount, "< min amount");
@@ -499,7 +499,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         address _addr,
         uint256 _id,
         uint256 _newEnd
-    ) internal lock {
+    ) internal {
         LockedBalance storage _lock = lockedPositions[_addr][_id];
         uint256 _lockEnd = _lock.end;
         require(_lockEnd < _newEnd, "new end has to be later");
@@ -558,7 +558,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         address _addr,
         uint256 _value,
         uint256 _id
-    ) internal lock {
+    ) internal {
         uint256 _now = block.timestamp;
 
         LockedBalance storage _lock = lockedPositions[_msgSender()][_id];
@@ -598,7 +598,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _id,
         LockedBalance memory _lock,
         address _recipient
-    ) internal lock {
+    ) internal {
         // assign lock
         lockedPositions[_recipient][_id] = _lock;
         // add maturity entry
@@ -613,7 +613,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         uint256 _minted,
         uint256 _start,
         uint256 _end
-    ) internal lock returns (uint256 _newId) {
+    ) internal returns (uint256 _newId) {
         _newId = lockCount;
         // assign lock for new id
         lockedPositions[_addr][_newId] = LockedBalance({amount: _amount, end: _end, minted: _minted, start: _start});
@@ -625,7 +625,7 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
         lockCount += 1;
     }
 
-    function _deleteLock(address _addr, uint256 _id) internal lock {
+    function _deleteLock(address _addr, uint256 _id) internal {
         // delete lock
         delete lockedPositions[_addr][_id];
 
