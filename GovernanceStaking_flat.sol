@@ -1002,7 +1002,7 @@ contract ERC20 is Context, IERC20, IERC20Metadata {
 
 
 
-pragma solidity 0.8.15;
+pragma solidity 0.8.16;
 
 
 

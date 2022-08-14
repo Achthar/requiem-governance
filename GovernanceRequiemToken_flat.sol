@@ -2,7 +2,7 @@
 // File: contracts/interfaces/governance/ILockKeeper.sol
 
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 interface ILockKeeper {
     struct LockedBalance {
@@ -22,7 +22,7 @@ interface ILockKeeper {
 // File: contracts/interfaces/governance/ICurveProvider.sol
 
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 interface ICurveProvider {
     function rate(
@@ -46,7 +46,7 @@ interface ICurveProvider {
 // File: contracts/interfaces/governance/IGovernanceRequiem.sol
 
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 interface IGovernanceRequiem {
     function createLock(
@@ -3130,7 +3130,7 @@ abstract contract ERC20BurnableUpgradeable is Initializable, ContextUpgradeable,
 
 
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 
 

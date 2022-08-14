@@ -2,7 +2,7 @@
 // File: contracts/interfaces/governance/ICurveProvider.sol
 
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 interface ICurveProvider {
     function rate(
@@ -39,7 +39,7 @@ interface ICurveProvider {
 // COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 /* solhint-disable */
 
@@ -386,7 +386,7 @@ library YieldMath {
 
 
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 
 

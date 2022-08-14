@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.15;
+pragma solidity ^0.8.16;
 
 import "./upgradeable/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import "./upgradeable/ERC20/extensions/ERC20VotesUpgradeable.sol";
@@ -652,10 +652,6 @@ contract GovernanceRequiemToken is ILockKeeper, IGovernanceRequiem, ERC20Burnabl
     }
 
     /* ========== MATH HELPERS ========== */
-
-    function _mul(uint256 a, uint256 b) private pure returns (uint256) {
-        return (a * b) / 1e18;
-    }
 
     function _shareOf(
         uint256 multiplier,
