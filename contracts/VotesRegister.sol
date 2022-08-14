@@ -16,7 +16,7 @@ import "./libraries/cryptography/draft-EIP712.sol";
 // solhint-disable max-line-length
 
 /**
- * @dev Extension of ERC20 to support Compound-like voting and delegation. This version is more generic than Compound's,
+ * @dev Voting register that allows Compound-like voting and delegation for multiple tokens that call respective functions on transfers. This version is more generic than Compound's,
  * and supports token supply up to 2^224^ - 1, while COMP is limited to 2^96^ - 1.
  *
  * NOTE: If exact COMP compatibility is required, use the {ERC20VotesComp} variant of this module.
@@ -30,7 +30,7 @@ import "./libraries/cryptography/draft-EIP712.sol";
  *
  * _Available since v4.2._
  */
-abstract contract PoolVotesRegister is IVotesRegister, Context, Ownable, EIP712 {
+contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
     struct Checkpoint {
         uint32 fromBlock;
         uint224 votes;
@@ -52,7 +52,6 @@ abstract contract PoolVotesRegister is IVotesRegister, Context, Ownable, EIP712 
 
     // maps as follows: pool -> totalSupply of pool LP token
     mapping(address => Checkpoint[]) private _totalSupplyCheckpoints;
-
 
     function registerToken(address token) public {
         require(authorized[msg.sender], "VotesRegister: unauthorized");
@@ -190,12 +189,9 @@ abstract contract PoolVotesRegister is IVotesRegister, Context, Ownable, EIP712 
      * according to the amount minted. Must not be implemented together with onAfterTokenTransfer as
      * we want to avoid two external calls in the token contract on mint.
      */
-    function onMint(
-        address account,
-        uint256 amount,
-        address pool
-    ) external virtual {
+    function onMint(address account, uint256 amount) external virtual {
         if (registeredTokens[_msgSender()]) {
+            address pool = _msgSender();
             _writeCheckpoint(_totalSupplyCheckpoints[pool], _add, amount);
             _moveVotingPower(pool, delegates(address(0), pool), delegates(account, pool), amount);
         }
@@ -207,12 +203,9 @@ abstract contract PoolVotesRegister is IVotesRegister, Context, Ownable, EIP712 
      * according to the amount minted. Must not be implemented together with onAfterTokenTransfer as
      * we want to avoid two external calls in the token contract on burn.
      */
-    function onBurn(
-        address account,
-        uint256 amount,
-        address pool
-    ) external virtual {
+    function onBurn(address account, uint256 amount) external virtual {
         if (registeredTokens[_msgSender()]) {
+            address pool = _msgSender();
             _writeCheckpoint(_totalSupplyCheckpoints[pool], _subtract, amount);
             _moveVotingPower(pool, delegates(address(0), pool), delegates(account, pool), amount);
         }
@@ -227,10 +220,10 @@ abstract contract PoolVotesRegister is IVotesRegister, Context, Ownable, EIP712 
     function onAfterTokenTransfer(
         address from,
         address to,
-        uint256 amount,
-        address pool
-    ) internal virtual {
+        uint256 amount
+    ) external virtual {
         if (registeredTokens[_msgSender()]) {
+            address pool = _msgSender();
             _moveVotingPower(pool, delegates(from, pool), delegates(to, pool), amount);
         }
     }

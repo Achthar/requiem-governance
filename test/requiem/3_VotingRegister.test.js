@@ -11,7 +11,9 @@ const Wallet = require('ethereumjs-wallet').default;
 const { promisify } = require('util');
 const queue = promisify(setImmediate);
 
-const GovernanceRequiemMock = artifacts.require('GovernanceRequiemMock');
+const ERC20VotesMock = artifacts.require('GovernanceRequiemMock');
+const MockRegisteredToken = artifacts.require('MockRegisteredToken');
+const VotingRegister = artifacts.require('VotesRegister');
 const ERC20Mock = artifacts.require('ERC20Mock');
 
 
@@ -54,7 +56,7 @@ async function batchInBlock(txs) {
   }
 }
 
-contract('Governance Requiem Votes', function (accounts) {
+contract('Requiem Votes Register', function (accounts) {
   const [holder, recipient, holderDelegatee, recipientDelegatee, other1, other2] = accounts;
 
   const name = 'My Token';
@@ -64,7 +66,9 @@ contract('Governance Requiem Votes', function (accounts) {
 
   beforeEach(async function () {
     this.lockedToken = await ERC20Mock.new(name, symbol, holder, supply);
-    this.token = await GovernanceRequiemMock.new(name, symbol, this.lockedToken.address, '0x0000000000000000000000000000000000000000', '1');
+    this.token = await ERC20VotesMock.new(name, symbol, this.lockedToken.address, '0x0000000000000000000000000000000000000000', '1');
+    this.register = await VotingRegister.new()
+    this.token1 = await MockRegisteredToken.new(name, symbol, this.register.address);
 
     // We get the chain id from the contract because Ganache (used for coverage) does not return the same chain id
     // from within the EVM as from the JSON RPC interface.
@@ -73,14 +77,14 @@ contract('Governance Requiem Votes', function (accounts) {
   });
 
   it('initial nonce is 0', async function () {
-    expect(await this.token.nonces(holder)).to.be.bignumber.equal('0');
+    expect(await this.register.nonces(holder)).to.be.bignumber.equal('0');
   });
 
   it('domain separator', async function () {
     expect(
-      await this.token.DOMAIN_SEPARATOR(),
+      await this.register.DOMAIN_SEPARATOR(),
     ).to.equal(
-      await domainSeparator(name, version, this.chainId, this.token.address),
+      await domainSeparator(name, version, this.chainId, this.register.address),
     );
   });
 

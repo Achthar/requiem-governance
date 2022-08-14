@@ -13,7 +13,7 @@ import "./LockKeeper.sol";
 
 // solhint-disable max-line-length
 
-/// @title Requiem Governance Token
+/// @title Requiem Governance Token non-upgradeable
 /// @author Achthar
 
 contract GovernanceRequiem is IGovernanceRequiem, ERC20Votes, ERC20Burnable, LockKeeper, Ownable {
