@@ -15,6 +15,10 @@ contract MockRegisteredToken is ERC20 {
         votesRegister = register;
     }
 
+    function getChainId() external view returns (uint256) {
+        return block.chainid;
+    }
+
     function mint(address account, uint256 amount) public {
         _mint(account, amount);
         votesRegister.onMint(account, amount);
