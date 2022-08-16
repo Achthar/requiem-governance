@@ -5,7 +5,7 @@ import "../../interfaces/governance/IVotesRegister.sol";
 import "../../token/ERC20/ERC20.sol";
 
 contract MockRegisteredToken is ERC20 {
-    IVotesRegister votesRegister;
+    IVotesRegister public votesRegister;
 
     constructor(
         string memory name,
@@ -16,21 +16,31 @@ contract MockRegisteredToken is ERC20 {
     }
 
     function mint(address account, uint256 amount) public {
-        super._mint(account, amount);
+        _mint(account, amount);
         votesRegister.onMint(account, amount);
     }
 
     function burn(address account, uint256 amount) public {
-        super._burn(account, amount);
+        _burn(account, amount);
         votesRegister.onBurn(account, amount);
     }
 
-    function _transfer(
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        address owner = _msgSender();
+        _transfer(owner, to, amount);
+        votesRegister.onAfterTokenTransfer(owner, to, amount);
+        return true;
+    }
+
+    function transferFrom(
         address from,
         address to,
         uint256 amount
-    ) internal override {
-        super._transfer(from, to, amount);
+    ) public override returns (bool) {
+        address spender = _msgSender();
+        _spendAllowance(from, spender, amount);
+        _transfer(from, to, amount);
         votesRegister.onAfterTokenTransfer(from, to, amount);
+        return true;
     }
 }

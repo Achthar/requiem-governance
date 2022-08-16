@@ -91,6 +91,7 @@
   },
   "dependencies": {
     "@nomiclabs/hardhat-waffle": "^2.0.3",
-    "dotenv": "^16.0.1"
+    "dotenv": "^16.0.1",
+    "ethereum-waffle": "^3.4.4"
   }
 }

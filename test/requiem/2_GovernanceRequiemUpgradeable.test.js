@@ -15,7 +15,7 @@ async function countPendingTransactions() {
 }
 
 
-contract('Governance Requiem Locks Upgradeable', function (accounts) {
+contract('Governance Requiem Locks Upgradeable', function () {
   let deployer, alice, bob, carol;
   let userLocks, lock, newLock
   let currentTimestamp

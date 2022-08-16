@@ -36,13 +36,13 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
         uint224 votes;
     }
 
-    bytes32 private constant _DELEGATION_TYPEHASH = keccak256("Delegation(address delegatee,uint256 nonce,uint256 expiry)");
+    bytes32 private constant _DELEGATION_TYPEHASH = keccak256("Delegation(address pool,address delegatee,uint256 nonce,uint256 expiry)");
 
     // flag whether address is authorized to register and deregister pool tokens
-    mapping(address => bool) private authorized;
+    mapping(address => bool) private _authorized;
 
     // flag for registered tokens for which the checkpoints and votes are tracked with this contract
-    mapping(address => bool) private registeredTokens;
+    mapping(address => bool) private _registeredTokens;
 
     // maps as follows: pool -> user -> delegate
     mapping(address => mapping(address => address)) private _delegates;
@@ -53,14 +53,30 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
     // maps as follows: pool -> totalSupply of pool LP token
     mapping(address => Checkpoint[]) private _totalSupplyCheckpoints;
 
+    function authorize(address entity) public onlyOwner {
+        _authorized[entity] = true;
+    }
+
+    function removeAuthorization(address entity) public onlyOwner {
+        _authorized[entity] = false;
+    }
+
     function registerToken(address token) public {
-        require(authorized[msg.sender], "VotesRegister: unauthorized");
-        registeredTokens[token] = true;
+        require(_authorized[_msgSender()], "VotesRegister: unauthorized");
+        _registeredTokens[token] = true;
     }
 
     function unregisterToken(address token) public {
-        require(authorized[msg.sender], "VotesRegister: unauthorized");
-        registeredTokens[token] = false;
+        require(_authorized[_msgSender()], "VotesRegister: unauthorized");
+        _registeredTokens[token] = false;
+    }
+
+    function isAuthorized(address entity) public view returns (bool) {
+        return _authorized[entity];
+    }
+
+    function isRegistered(address token) public view returns (bool) {
+        return _registeredTokens[token];
     }
 
     function balanceOf(address user, address pool) public view returns (uint256) {
@@ -162,15 +178,15 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
      * @dev Delegate votes from the sender to `delegatee`.
      */
     function delegate(address delegatee, address pool) public virtual override {
-        _delegate(_msgSender(), pool, delegatee);
+        _delegate(_msgSender(), delegatee, pool);
     }
 
     /**
      * @dev Delegates votes from signer to `delegatee`
      */
     function delegateBySig(
-        address pool,
         address delegatee,
+        address pool,
         uint256 nonce,
         uint256 expiry,
         uint8 v,
@@ -178,9 +194,9 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
         bytes32 s
     ) public virtual override {
         require(block.timestamp <= expiry, "VotesRegister: signature expired");
-        address signer = ECDSA.recover(_hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, delegatee, nonce, expiry))), v, r, s);
+        address signer = ECDSA.recover(_hashTypedDataV4(keccak256(abi.encode(_DELEGATION_TYPEHASH, pool, delegatee, nonce, expiry))), v, r, s);
         require(nonce == _useNonce(signer), "VotesRegister: invalid nonce");
-        _delegate(pool, signer, delegatee);
+        _delegate(signer, delegatee, pool);
     }
 
     /**
@@ -190,7 +206,7 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
      * we want to avoid two external calls in the token contract on mint.
      */
     function onMint(address account, uint256 amount) external virtual {
-        if (registeredTokens[_msgSender()]) {
+        if (_registeredTokens[_msgSender()]) {
             address pool = _msgSender();
             _writeCheckpoint(_totalSupplyCheckpoints[pool], _add, amount);
             _moveVotingPower(pool, delegates(address(0), pool), delegates(account, pool), amount);
@@ -204,7 +220,7 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
      * we want to avoid two external calls in the token contract on burn.
      */
     function onBurn(address account, uint256 amount) external virtual {
-        if (registeredTokens[_msgSender()]) {
+        if (_registeredTokens[_msgSender()]) {
             address pool = _msgSender();
             _writeCheckpoint(_totalSupplyCheckpoints[pool], _subtract, amount);
             _moveVotingPower(pool, delegates(address(0), pool), delegates(account, pool), amount);
@@ -222,8 +238,8 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
         address to,
         uint256 amount
     ) external virtual {
-        if (registeredTokens[_msgSender()]) {
-            address pool = _msgSender();
+        address pool = msg.sender;
+        if (_registeredTokens[pool]) {
             _moveVotingPower(pool, delegates(from, pool), delegates(to, pool), amount);
         }
     }
@@ -234,9 +250,9 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
      * Emits events {DelegateChanged} and {DelegateVotesChanged}.
      */
     function _delegate(
-        address pool,
         address delegator,
-        address delegatee
+        address delegatee,
+        address pool
     ) internal virtual {
         address currentDelegate = delegates(delegator, pool);
         uint256 delegatorBalance = balanceOf(delegator, pool);
@@ -310,13 +326,21 @@ contract VotesRegister is IVotesRegister, Context, Ownable, EIP712 {
      *
      * It's a good idea to use the same `name` that is defined as the ERC20 token name.
      */
-    constructor() EIP712("Requiem Pool Votes Register", "1") {}
+    constructor() EIP712("Requiem Pool Voting Register", "1") {}
 
     /**
      * @dev See {IERC20Permit-nonces}.
      */
     function nonces(address owner) public view virtual returns (uint256) {
         return _nonces[owner].current();
+    }
+
+    /**
+     * @dev Returns the contract's {EIP712} domain separator.
+     */
+    // solhint-disable-next-line func-name-mixedcase
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
     }
 
     /**
