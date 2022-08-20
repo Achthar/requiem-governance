@@ -101,7 +101,7 @@ module.exports = {
       // tags: ['staging'],
       // gasMultiplier: 4,
       gas: 800000,
-      gasPrice: 2500000000,
+      gasPrice: 250000000000,
     },
   },
   gasReporter: {
@@ -118,7 +118,7 @@ module.exports = {
     settings: {
       optimizer: {
         enabled: true,
-        runs: 10000
+        runs: 999999
       }
     }
   },
