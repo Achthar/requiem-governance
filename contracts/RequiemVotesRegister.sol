@@ -55,7 +55,7 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
     mapping(address => mapping(address => CheckpointUpgradeable[])) private _checkpoints;
 
     // maps as follows: token -> totalSupply of token LP token
-    mapping(address => CheckpointUpgradeable[]) private _totalSupplyCheckpointUpgradeables;
+    mapping(address => CheckpointUpgradeable[]) private _totalSupplyCheckpoint;
 
     function initialize(string memory name) public initializer {
         __Context_init();
@@ -167,7 +167,7 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
      */
     function getPastTotalSupply(address token, uint256 blockNumber) public view virtual override returns (uint256) {
         require(blockNumber < block.number, "VotesRegister: block not yet mined");
-        return _checkpointsLookup(_totalSupplyCheckpointUpgradeables[token], blockNumber);
+        return _checkpointsLookup(_totalSupplyCheckpoint[token], blockNumber);
     }
 
     /**
@@ -238,7 +238,7 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
     function onMint(address account, uint256 amount) external virtual {
         address token = _msgSender();
         if (_registeredTokens[token]) {
-            _writeCheckpointUpgradeable(_totalSupplyCheckpointUpgradeables[token], _add, amount);
+            _writeCheckpoint(_totalSupplyCheckpoint[token], _add, amount);
             _moveVotingPower(token, delegates(address(0), token), delegates(account, token), amount);
         }
     }
@@ -252,7 +252,7 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
     function onBurn(address account, uint256 amount) external virtual {
         address token = _msgSender();
         if (_registeredTokens[token]) {
-            _writeCheckpointUpgradeable(_totalSupplyCheckpointUpgradeables[token], _subtract, amount);
+            _writeCheckpoint(_totalSupplyCheckpoint[token], _subtract, amount);
             _moveVotingPower(token, delegates(address(0), token), delegates(account, token), amount);
         }
     }
@@ -301,18 +301,18 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
     ) private {
         if (src != dst && amount > 0) {
             if (src != address(0)) {
-                (uint256 oldWeight, uint256 newWeight) = _writeCheckpointUpgradeable(_checkpoints[token][src], _subtract, amount);
+                (uint256 oldWeight, uint256 newWeight) = _writeCheckpoint(_checkpoints[token][src], _subtract, amount);
                 emit DelegateVotesChanged(token, src, oldWeight, newWeight);
             }
 
             if (dst != address(0)) {
-                (uint256 oldWeight, uint256 newWeight) = _writeCheckpointUpgradeable(_checkpoints[token][dst], _add, amount);
+                (uint256 oldWeight, uint256 newWeight) = _writeCheckpoint(_checkpoints[token][dst], _add, amount);
                 emit DelegateVotesChanged(token, dst, oldWeight, newWeight);
             }
         }
     }
 
-    function _writeCheckpointUpgradeable(
+    function _writeCheckpoint(
         CheckpointUpgradeable[] storage ckpts,
         function(uint256, uint256) view returns (uint256) op,
         uint256 delta
