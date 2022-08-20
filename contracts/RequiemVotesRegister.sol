@@ -236,8 +236,8 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
      * we want to avoid two external calls in the token contract on mint.
      */
     function onMint(address account, uint256 amount) external virtual {
-        if (_registeredTokens[_msgSender()]) {
-            address token = _msgSender();
+        address token = _msgSender();
+        if (_registeredTokens[token]) {
             _writeCheckpointUpgradeable(_totalSupplyCheckpointUpgradeables[token], _add, amount);
             _moveVotingPower(token, delegates(address(0), token), delegates(account, token), amount);
         }
@@ -250,8 +250,8 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
      * we want to avoid two external calls in the token contract on burn.
      */
     function onBurn(address account, uint256 amount) external virtual {
-        if (_registeredTokens[_msgSender()]) {
-            address token = _msgSender();
+        address token = _msgSender();
+        if (_registeredTokens[token]) {
             _writeCheckpointUpgradeable(_totalSupplyCheckpointUpgradeables[token], _subtract, amount);
             _moveVotingPower(token, delegates(address(0), token), delegates(account, token), amount);
         }
@@ -268,7 +268,7 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
         address to,
         uint256 amount
     ) external virtual {
-        address token = msg.sender;
+        address token = _msgSender();
         if (_registeredTokens[token]) {
             _moveVotingPower(token, delegates(from, token), delegates(to, token), amount);
         }
