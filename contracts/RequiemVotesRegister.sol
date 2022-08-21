@@ -253,7 +253,7 @@ contract RequiemVotesRegister is IVotesRegisterUpgradeable, Initializable, Conte
         address token = _msgSender();
         if (_registeredTokens[token]) {
             _writeCheckpoint(_totalSupplyCheckpoint[token], _subtract, amount);
-            _moveVotingPower(token, delegates(address(0), token), delegates(account, token), amount);
+            _moveVotingPower(token, delegates(account, token), delegates(address(0), token), amount);
         }
     }
 
