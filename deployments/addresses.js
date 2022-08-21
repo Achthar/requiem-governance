@@ -137,7 +137,7 @@ const addresses = {
     "register": {
         42261: {
             "admin": "0x619359d5E5a96878CF2515794dB2E4C3b17bC9Eb",
-            "logic": "0xf95c9041cccdfe27f06da7be62257b50994d0fd1",
+            "logic": "0x22F3dfc6c8830DDb3140158B9f9a9d3a1134EE9C",
             "proxy": "0x98d64e2457cB508630e38A3b9e700e6985F49fAd"
         }
     }
