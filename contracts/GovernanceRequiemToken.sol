@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.8.16;
+pragma solidity ^0.8.17;
 
 import "./upgradeable/ERC20/extensions/ERC20BurnableUpgradeable.sol";
 import "./upgradeable/ERC20/extensions/ERC20VotesUpgradeable.sol";

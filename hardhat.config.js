@@ -35,7 +35,7 @@ const argv = require('yargs/yargs')()
     compiler: {
       alias: 'compileVersion',
       type: 'string',
-      default: '0.8.16',
+      default: '0.8.17',
     },
     coinmarketcap: {
       alias: 'coinmarketcapApiKey',
@@ -103,6 +103,15 @@ module.exports = {
       gas: 800000,
       gasPrice: 250000000000,
     },
+    'thunder-core-testnet': {
+      url: 'https://testnet-rpc.thundercore.com',
+      accounts: [pk1, pk2],
+      chainId: 18,
+      live: true,
+      saveDeployments: true,
+      gas: 2000000,
+      gasPrice: 350000000000,
+    },
   },
   gasReporter: {
     currency: 'USD',
@@ -114,11 +123,11 @@ module.exports = {
     disambiguatePaths: false,
   },
   solidity: {
-    version: '0.8.16',
+    version: '0.8.17',
     settings: {
       optimizer: {
         enabled: true,
-        runs: 999999
+        runs: 50000
       }
     }
   },

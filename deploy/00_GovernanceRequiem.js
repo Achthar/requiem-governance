@@ -16,7 +16,7 @@ async function main() {
     const reqAddress = addresses.reqAddress[chainId]
 
     const CurveProvider = await ethers.getContractFactory('CurveProvider')
-    const GovernanceRequiem = await ethers.getContractFactory('GovernanceRequiem')
+    const GovernanceRequiem = await ethers.getContractFactory('GovernanceRequiemToken')
     const TransparentUpgradeableProxy = await ethers.getContractFactory('TransparentUpgradeableProxy')
     const ProxyAdmin = await ethers.getContractFactory('ProxyAdmin')
 

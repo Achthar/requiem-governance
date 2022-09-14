@@ -1,4 +1,7 @@
 const addresses = {
+    "proxyAdmin": {
+        18: "0xbf08A42EC083EFD9b9455CeA0b4D59C7C7995983"
+    },
     "diamondAddress": {
         43113: "0x95034449E6cD17330E62D8e33a75a39927Fb02cb",
         42261: "0x5121B5E7E076c16570A541C68549b4C0C76275BD"
@@ -159,6 +162,10 @@ const addresses = {
             "admin": "0x619359d5E5a96878CF2515794dB2E4C3b17bC9Eb",
             "logic": "0xf95c9041cccdfe27f06da7be62257b50994d0fd1",
             "proxy": "0x22F3dfc6c8830DDb3140158B9f9a9d3a1134EE9C"
+        },
+        18: {
+            "logic": "0x3F9eD8Ac8374B3D2A322BcFA29Ce0bBaB3841fc9",
+            "proxy": "0x827B8EABee7F0805c402ea559F62FA6bb43Dc35f"
         }
     },
     "pair": {

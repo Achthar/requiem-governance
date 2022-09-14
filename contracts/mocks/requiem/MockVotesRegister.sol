@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity 0.8.17;
 
 import "../../VotesRegister.sol";
 import "../../token/ERC20/ERC20.sol";
